@@ -167,7 +167,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // tutte le configurazioni valide per quella linea (0/1). Restituisce array di possibili linee.
   function lineConfigurations(length, blocks, partial){
     const totalFilled = blocks.reduce((a,b)=>a+b,0);
-    const minSpaces = blocks.length - 1;
+    const minSpaces = blocks.length > 0 ? (blocks.length - 1) : 0;
     const need = totalFilled + minSpaces;
     if (blocks.length===0){
       // tutto vuoto
@@ -190,17 +190,21 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
       }
       const bLen = blocks[blockIdx];
+
       for (let pos = startPos; pos + bLen <= length; pos++){
-        // prova mettere blocco a pos
-        // ma prima riempi eventuali zeri da startPos a pos-1
+        // 1) Zeri obbligatori tra startPos e pos-1
+        let okZeros = true;
         for (let z=startPos; z<pos; z++){
-          if (partial[z]===1) { // non può essere pieno
-            // ripristina? arr[z] è già 0
-            return; // interrompi perché pos solo cresce, se qui 1 non va per nessun pos successivo? non necessariamente
-          }
+          if (partial[z]===1){ okZeros = false; break; } // non può essere pieno
           arr[z]=0;
         }
-        // metti blocco
+        if (!okZeros){
+          // questa posizione "pos" è impossibile, prova la successiva
+          // (ripristino non strettamente necessario: gli zeri rimangono zeri)
+          continue;
+        }
+
+        // 2) Metti il blocco pieno
         let ok=true;
         for (let j=0;j<bLen;j++){
           if (partial[pos+j]===-1){ ok=false; break; } // non può essere X
@@ -211,12 +215,12 @@ document.addEventListener('DOMContentLoaded', () => {
           for (let j=0;j<bLen;j++) arr[pos+j]=0;
           continue;
         }
-        // se non è l'ultimo blocco, deve esserci almeno uno 0 dopo
+
+        // 3) Se non è l'ultimo blocco, imponi almeno uno zero di separazione
         let nextStart = pos+bLen;
         if (blockIdx < blocks.length-1){
           if (nextStart>=length) {
             // non c'è spazio per lo zero separatore
-            // ripulisci blocco
             for (let j=0;j<bLen;j++) arr[pos+j]=0;
             continue;
           }
@@ -227,20 +231,20 @@ document.addEventListener('DOMContentLoaded', () => {
           }
           arr[nextStart]=0;
           nextStart++;
-        } else {
-          // ultimo blocco: riempire després con zeri
-          // (non qui, lo farà ricorsione base)
         }
+
+        // 4) Ricorsione per il blocco successivo
         place(blockIdx+1, nextStart, arr);
 
-        // ripristina il blocco prima di iterare pos++
+        // 5) Ripristina il blocco prima di iterare pos++
         for (let j=0;j<bLen;j++) arr[pos+j]=0;
         if (blockIdx < blocks.length-1){
-          arr[pos+bLen]=0; // già 0
+          arr[pos+bLen]=0; // resta 0 come separatore (non fa danni)
         }
       }
     }
     place(0,0,new Array(length).fill(0));
+
     // Filtra per coerenza con partial dove partial=1 deve essere 1, partial=-1 deve essere 0
     return res.filter(arr=>{
       for (let i=0;i<length;i++){
@@ -397,8 +401,6 @@ document.addEventListener('DOMContentLoaded', () => {
       // Se ha già completato più blocchi di quelli target → incoerente
       if (blocksSeen.length > blocks.length) return false;
 
-      // Se una cella è -1 tra due blocchi "in costruzione" va bene (separa)
-      // Se ignota, non giudichiamo.
       return true;
     }
     for (let r=0;r<H;r++){
@@ -440,7 +442,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!ok){ setStatus('⛔ Contraddizione: controlla le celle segnate.'); renderBoard(); return; }
     renderBoard();
     const changed = before.some((v,i)=> v!==grid[i]);
-    setStatus(changed ? '✨ Deductions applicate.' : 'ℹ️ Nessuna deduzione trovata.');
+    setStatus(changed ? '✨ Deduzioni applicate.' : 'ℹ️ Nessuna deduzione trovata.');
   });
 
   solveBtn.addEventListener('click', ()=>{
