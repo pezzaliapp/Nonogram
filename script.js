@@ -1,4 +1,4 @@
-/* Nonogram PWA — PezzaliAPP (zoom + theme + scroll sync) */
+/* Nonogram PWA — PezzaliAPP (generator + sync + theme + zoom) */
 document.addEventListener('DOMContentLoaded', () => {
   'use strict';
 
@@ -21,6 +21,13 @@ document.addEventListener('DOMContentLoaded', () => {
   const themeBtn = document.getElementById('themeBtn');
   const themeColorMeta = document.getElementById('themeColor');
 
+  // Generator controls
+  const sizeSel = document.getElementById('sizeSel');
+  const densRange = document.getElementById('densRange');
+  const densVal = document.getElementById('densVal');
+  const genBtn = document.getElementById('genBtn');
+  const genStatus = document.getElementById('genStatus');
+
   // --- Theme handling ---
   const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
   function applyTheme(theme){
@@ -41,7 +48,7 @@ document.addEventListener('DOMContentLoaded', () => {
   let colClues = [];
   let R = 0, C = 0;
 
-  // Inner wrappers for scroll syncing
+  // Wrappers for scroll syncing
   const colInner = document.createElement('div');
   colInner.className = 'inner';
   const rowInner = document.createElement('div');
@@ -139,8 +146,7 @@ document.addEventListener('DOMContentLoaded', () => {
     zoomRange.value = String(cell);
     zoomVal.textContent = `${cell}px`;
     localStorage.setItem('nonogram-cell', String(cell));
-    // Update inner wrappers sizes via CSS grid (no extra work)
-    syncScroll(); // keep alignment after zoom
+    syncScroll();
   }
 
   function resetFromPreset(key){
@@ -226,7 +232,7 @@ document.addEventListener('DOMContentLoaded', () => {
     setCell(r,c,nxt,false);
   }
 
-  // --- Line logic (unchanged) ---
+  // --- Line logic (same as before) ---
   function linePlacements(line, clues){
     const N = line.length;
     if (clues.length===1 && clues[0]===0){
@@ -432,6 +438,131 @@ document.addEventListener('DOMContentLoaded', () => {
     return ok;
   }
 
+  // --- Counting solver for uniqueness ---
+  function countSolutions(limit=2){
+    // Work on a fresh unknown grid with current clues
+    const g = Array.from({length:R}, () => Array(C).fill(0));
+
+    function cloneGrid(g){ return g.map(row=>row.slice()); }
+
+    function applyDeductionsTo(gridRef){
+      let changed;
+      do{
+        changed = false;
+        // rows
+        for (let r=0;r<R;r++){
+          const placements = linePlacements(gridRef[r], rowClues[r]);
+          if (placements.length===0) return false;
+          const inter = intersectPlacements(placements);
+          for (let c=0;c<C;c++){
+            if (inter[c]!==0 && gridRef[r][c]!==inter[c]){
+              gridRef[r][c] = inter[c];
+              changed = true;
+            }
+          }
+        }
+        // cols
+        for (let c=0;c<C;c++){
+          const col = Array.from({length:R}, (_,r)=>gridRef[r][c]);
+          const placements = linePlacements(col, colClues[c]);
+          if (placements.length===0) return false;
+          const inter = intersectPlacements(placements);
+          for (let r=0;r<R;r++){
+            if (inter[r]!==0 && gridRef[r][c]!==inter[r]){
+              gridRef[r][c] = inter[r];
+              changed = true;
+            }
+          }
+        }
+      } while (changed);
+      return true;
+    }
+
+    let count = 0;
+    function dfs(gridRef){
+      if (!applyDeductionsTo(gridRef)) return;
+      // check if complete
+      let complete = true;
+      outer: for (let r=0;r<R;r++){
+        for (let c=0;c<C;c++){
+          if (gridRef[r][c]===0){ complete = false; break outer; }
+        }
+      }
+      if (complete){
+        // verify matches clues exactly
+        for (let r=0;r<R;r++){ if (!lineMatches(gridRef[r], rowClues[r])) return; }
+        for (let c=0;c<C;c++){
+          const col = Array.from({length:R}, (_,r)=>gridRef[r][c]);
+          if (!lineMatches(col, colClues[c])) return;
+        }
+        count++; 
+        return;
+      }
+      // pick first unknown
+      let rr=-1,cc=-1;
+      outer2: for (let r=0;r<R;r++){
+        for (let c=0;c<C;c++){
+          if (gridRef[r][c]===0){ rr=r; cc=c; break outer2; }
+        }
+      }
+      if (rr===-1){ count++; return; }
+      const snap = cloneGrid(gridRef);
+      // try fill
+      gridRef[rr][cc]=1; dfs(gridRef);
+      if (count>=limit) return;
+      // try X
+      for (let r=0;r<R;r++){ gridRef[r] = snap[r].slice(); }
+      gridRef[rr][cc]=-1; dfs(gridRef);
+    }
+
+    dfs(g);
+    return count;
+  }
+
+  // --- Random generator with uniqueness guarantee ---
+  function randomBitmap(rows, cols, p){
+    // simple random with probability p of filled; avoid trivial all empty/full
+    const img = [];
+    let ones=0;
+    for (let r=0;r<rows;r++){
+      let line = '';
+      for (let c=0;c<cols;c++){
+        if (Math.random() < p){ line += '#'; ones++; }
+        else { line += '.'; }
+      }
+      img.push(line);
+    }
+    if (ones===0 || ones===rows*cols) return null;
+    return img;
+  }
+
+  async function generateUnique(rows, cols, pFill=0.35, maxTries=200){
+    // UI status
+    genStatus.textContent = 'Generazione in corso…';
+    await new Promise(r=>setTimeout(r)); // yield to paint
+    for (let t=1;t<=maxTries;t++){
+      const img = randomBitmap(rows, cols, pFill);
+      if (!img) continue;
+      const clues = imgToClues(img);
+      rowClues = clues.rows; colClues = clues.cols; R=rows; C=cols;
+      // Count solutions on empty grid
+      const n = countSolutions(2);
+      if (n === 1){
+        grid = Array.from({length:R}, () => Array(C).fill(0));
+        setCSSVars();
+        renderAll();
+        genStatus.textContent = `OK (tentativo ${t}, unica soluzione)`;
+        return true;
+      }
+      if (t % 20 === 0){
+        genStatus.textContent = `Tentativo ${t}/${maxTries}…`;
+        await new Promise(r=>setTimeout(r));
+      }
+    }
+    genStatus.textContent = 'Nessun puzzle unico trovato. Riprova con altra densità.';
+    return false;
+  }
+
   // --- Export/Import ---
   function exportJSON(){
     const data = { grid, rowClues, colClues };
@@ -474,7 +605,7 @@ document.addEventListener('DOMContentLoaded', () => {
     deferredPrompt = null; installBtn.hidden = true;
   });
 
-  // --- Zoom slider & pinch to zoom ---
+  // --- Zoom controls & pinch ---
   function setCellSize(px){ setCSSVars(px); }
   zoomRange.addEventListener('input', (e)=> setCellSize(parseInt(e.target.value,10)));
 
@@ -506,9 +637,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }, {passive:false});
 
-  // --- Scroll sync: keep numbers aligned with cells while panning/zooming ---
+  // --- Scroll sync ---
   function syncScroll(){
-    // translate inner wrappers to mirror board scroll
     const x = boardEl.scrollLeft;
     const y = boardEl.scrollTop;
     colInner.style.transform = `translateX(${-x}px)`;
@@ -538,6 +668,27 @@ document.addEventListener('DOMContentLoaded', () => {
   importInput.addEventListener('change', (e)=>{
     if (e.target.files && e.target.files[0]) importJSON(e.target.files[0]);
     e.target.value = '';
+  });
+
+  // Generator controls init
+  densRange.value = localStorage.getItem('nonogram-dens') || '35';
+  densVal.textContent = densRange.value + '%';
+  densRange.addEventListener('input', ()=>{
+    densVal.textContent = densRange.value + '%';
+    localStorage.setItem('nonogram-dens', densRange.value);
+  });
+  sizeSel.value = localStorage.getItem('nonogram-size') || '10x10';
+  sizeSel.addEventListener('change', ()=> localStorage.setItem('nonogram-size', sizeSel.value));
+
+  genBtn.addEventListener('click', async ()=>{
+    const [rows, cols] = sizeSel.value.split('x').map(Number);
+    const p = parseInt(densRange.value,10)/100;
+    genBtn.disabled = true;
+    try{
+      await generateUnique(rows, cols, p, 250);
+    } finally {
+      genBtn.disabled = false;
+    }
   });
 
   // init

@@ -51,6 +51,21 @@
     <span class="hint">Pinch a due dita per zoomare; trascina per scorrere.</span>
   </section>
 
+  <section class="toolbar third">
+    <label>Dimensione:
+      <select id="sizeSel">
+        <option value="10x10">10×10</option>
+        <option value="15x15">15×15</option>
+      </select>
+    </label>
+    <label>Densità:
+      <input id="densRange" type="range" min="15" max="65" step="1">
+      <span id="densVal"></span>
+    </label>
+    <button id="genBtn">Casuale (unica)</button>
+    <span id="genStatus" class="hint"></span>
+  </section>
+
   <main id="game">
     <div id="colClues" class="clues col" aria-hidden="true"></div>
     <div id="rowClues" class="clues row" aria-hidden="true"></div>

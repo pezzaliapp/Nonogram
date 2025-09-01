@@ -1,7 +1,7 @@
 {
   "name": "Nonogram — PezzaliAPP",
   "short_name": "Nonogram",
-  "description": "Crucipixel / Griddlers — puzzle di logica. Funziona offline.",
+  "description": "Crucipixel / Griddlers — puzzle di logica. Funziona offline. Generatore casuale con unicità garantita.",
   "start_url": ".",
   "display": "standalone",
   "background_color": "#0f172a",
