@@ -1,4 +1,4 @@
-/* Nonogram PWA — PezzaliAPP */
+/* Nonogram PWA — PezzaliAPP (aligned clues) */
 document.addEventListener('DOMContentLoaded', () => {
   'use strict';
 
@@ -95,6 +95,16 @@ document.addEventListener('DOMContentLoaded', () => {
     return {rows, cols};
   }
 
+  function setCSSVars(){
+    const root = document.documentElement;
+    root.style.setProperty('--R', R);
+    root.style.setProperty('--C', C);
+    // responsive cell size: try to fit screen width (padding ~ 32 + clues area ~ 40%)
+    const maxBoardWidth = Math.max(280, Math.min(window.innerWidth - 40, 900));
+    const cell = Math.max(22, Math.min(48, Math.floor(maxBoardWidth / (C + 2))));
+    root.style.setProperty('--cell', `${cell}px`);
+  }
+
   function resetFromPreset(key){
     const img = PRESETS[key];
     const clues = imgToClues(img);
@@ -103,6 +113,7 @@ document.addEventListener('DOMContentLoaded', () => {
     R = rowClues.length;
     C = colClues.length;
     grid = Array.from({length:R}, () => Array(C).fill(0));
+    setCSSVars();
     renderAll();
   }
 
@@ -113,7 +124,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function renderClues(){
-    // Row clues
+    // Row clues grid: one row per puzzle row
     rowCluesEl.innerHTML = '';
     for (let r=0;r<R;r++){
       const wrap = document.createElement('div');
@@ -126,7 +137,7 @@ document.addEventListener('DOMContentLoaded', () => {
       });
       rowCluesEl.appendChild(wrap);
     }
-    // Column clues
+    // Column clues grid: one column per puzzle col
     colCluesEl.innerHTML = '';
     for (let c=0;c<C;c++){
       const wrap = document.createElement('div');
@@ -145,8 +156,6 @@ document.addEventListener('DOMContentLoaded', () => {
     boardEl.innerHTML = '';
     const g = document.createElement('div');
     g.className = 'boardgrid';
-    g.style.gridTemplateColumns = `repeat(${C}, 1fr)`;
-    g.style.width = `${Math.min(32*C, 28*C+8)}px`; // responsive-ish
     for (let r=0;r<R;r++){
       for (let c=0;c<C;c++){
         const cell = document.createElement('div');
@@ -180,26 +189,19 @@ document.addEventListener('DOMContentLoaded', () => {
     setCell(r,c,nxt,false);
   }
 
-  // --- Line logic: generate all placements for a line given clues and current states ---
-  // State: 0 unknown, 1 full, -1 x
+  // --- Line logic (same as before) ---
   function linePlacements(line, clues){
     const N = line.length;
     if (clues.length===1 && clues[0]===0){
-      // all must be X
       if (line.every(v => v!==1)) return [Array(N).fill(-1)];
-      return []; // impossible if some is full
+      return [];
     }
     const res = [];
-    const totalBlocks = clues.reduce((a,b)=>a+b,0);
-    const minSpaces = clues.length - 1;
-    const minLen = totalBlocks + minSpaces;
-
     function place(idx, start, acc){
       if (idx === clues.length){
-        // fill trailing Xs
         const arr = acc.slice();
         for (let i = arr.length; i<N; i++){
-          if (line[i]===1) return; // conflict (must not be full)
+          if (line[i]===1) return;
           arr[i] = -1;
         }
         res.push(arr);
@@ -207,16 +209,12 @@ document.addEventListener('DOMContentLoaded', () => {
       }
       const k = clues[idx];
       for (let s = start; s + (clues.slice(idx).reduce((a,b)=>a+b,0)) + (clues.length-idx-1) <= N; s++){
-        // try placing block k at s
-        // ensure preceding cell is X (except at start)
         const arr = acc.slice();
-        // leading Xs up to s
         for (let i = arr.length; i < s; i++){
-          if (line[i]===1) { s = N; break; } // conflict; break outer loop by pushing s to end
+          if (line[i]===1) { s = N; break; }
           arr[i] = -1;
         }
-        if (arr.length !== s) continue; // conflict advanced s, skip
-        // place k fulls
+        if (arr.length !== s) continue;
         let ok = true;
         for (let i=0;i<k;i++){
           const pos = s+i;
@@ -224,20 +222,15 @@ document.addEventListener('DOMContentLoaded', () => {
           arr[pos] = 1;
         }
         if (!ok) continue;
-        // trailing X after block (if not last)
         const after = s+k;
         if (idx < clues.length-1){
           if (after>=N || line[after]===1){ continue; }
           arr[after] = -1;
-        } else {
-          // last block; remaining cells can be X
         }
         place(idx+1, after + (idx < clues.length-1 ? 1 : 0), arr);
       }
     }
-    // possible earliest start is 0, latest such that remaining fits
     place(0, 0, []);
-    // filter to keep those fully consistent with line (no conflicts)
     return res.filter(arr=>{
       for (let i=0;i<N;i++){
         if (line[i]===1 && arr[i]!==1) return false;
@@ -263,12 +256,10 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function applyLineDeductions(){
-    // one pass on all rows then cols; returns list of changed cells [{r,c,val}]
     const changes = [];
-    // rows
     for (let r=0;r<R;r++){
       const placements = linePlacements(grid[r], rowClues[r]);
-      if (placements.length===0) continue; // contradiction or nothing
+      if (placements.length===0) continue;
       const inter = intersectPlacements(placements);
       for (let c=0;c<C;c++){
         if (inter[c]!==0 && grid[r][c]!==inter[c]){
@@ -277,7 +268,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
       }
     }
-    // cols
     for (let c=0;c<C;c++){
       const col = Array.from({length:R}, (_,r)=>grid[r][c]);
       const placements = linePlacements(col, colClues[c]);
@@ -294,7 +284,6 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function fullyConsistent(){
-    // check each row/col has at least one placement consistent
     for (let r=0;r<R;r++){
       if (linePlacements(grid[r], rowClues[r]).length===0) return false;
     }
@@ -306,7 +295,6 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function isSolved(){
-    // no unknowns and each line matches clues exactly
     for (let r=0;r<R;r++){
       if (!lineMatches(grid[r], rowClues[r])) return false;
     }
@@ -326,14 +314,12 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     if (count>0) groups.push(count);
     if (groups.length===0) groups.push(0);
-    // normalize zero case
     const norm = (groups.length===1 && groups[0]===0) ? [0] : groups;
     const target = (clues.length===1 && clues[0]===0) ? [0] : clues;
     if (norm.length!==target.length) return false;
     for (let i=0;i<norm.length;i++){
       if (norm[i]!==target[i]) return false;
     }
-    // also ensure no unknowns linger if any block present
     if (line.some(v=>v===0)) return false;
     return true;
   }
@@ -350,12 +336,10 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function hintOnce(){
-    const before = JSON.stringify(grid);
     const changes = applyLineDeductions();
     if (changes.length>0){
       renderBoard();
       for (const ch of changes){
-        // highlight only first batch; break after few
         const idx = ch.r*C + ch.c;
         const cell = boardEl.querySelector('.boardgrid').children[idx];
         cell.classList.add('hint');
@@ -367,17 +351,12 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function solve(){
-    // first aggressive deductions
     deduceLoop();
     if (isSolved()) return true;
 
-    // choose a cell with ambiguity using heuristic: cell that appears same across row/col intersections?
-    // We'll pick first unknown that, when set, keeps consistency.
     function cloneGrid(g){ return g.map(row=>row.slice()); }
-
     function dfs(){
       if (!fullyConsistent()) return false;
-      // deduce
       let progress = true;
       while (progress){
         const changes = applyLineDeductions();
@@ -387,7 +366,6 @@ document.addEventListener('DOMContentLoaded', () => {
       if (isComplete()){
         return isSolved();
       }
-      // pick first unknown with some constraints
       let r=-1,c=-1;
       outer: for (let i=0;i<R;i++){
         for (let j=0;j<C;j++){
@@ -396,21 +374,14 @@ document.addEventListener('DOMContentLoaded', () => {
       }
       if (r===-1) return isSolved();
       const snapshot = cloneGrid(grid);
-
-      // try fill
       grid[r][c]=1;
       if (dfs()) return true;
-
-      // backtrack & try X
       grid = cloneGrid(snapshot);
       grid[r][c] = -1;
       if (dfs()) return true;
-
-      // neither works
       grid = cloneGrid(snapshot);
       return false;
     }
-
     function isComplete(){
       for (let i=0;i<R;i++){
         for (let j=0;j<C;j++){
@@ -419,7 +390,6 @@ document.addEventListener('DOMContentLoaded', () => {
       }
       return true;
     }
-
     const ok = dfs();
     renderBoard();
     return ok;
@@ -446,6 +416,7 @@ document.addEventListener('DOMContentLoaded', () => {
         colClues = obj.colClues;
         R = rowClues.length; C = colClues.length;
         grid = obj.grid;
+        setCSSVars();
         renderAll();
       } catch(e){
         alert('Errore import: ' + e.message);
@@ -488,6 +459,9 @@ document.addEventListener('DOMContentLoaded', () => {
     await deferredPrompt.userChoice;
     deferredPrompt = null; installBtn.hidden = true;
   });
+
+  // adapt on resize
+  window.addEventListener('resize', setCSSVars, {passive:true});
 
   // init
   resetFromPreset(presetSel.value);

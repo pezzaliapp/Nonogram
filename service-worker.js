@@ -1,5 +1,5 @@
 // Nonogram PWA — service worker (PezzaliAPP)
-const CACHE = 'nonogram-v1';
+const CACHE = 'nonogram-v2';
 const ASSETS = [
   './',
   './index.html',
