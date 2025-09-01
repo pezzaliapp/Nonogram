@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0b1220" />
+  <title>Nonogram (Picross)</title>
+
+  <link rel="manifest" href="manifest.json" />
+  <link rel="icon" href="icons/favicon.ico" />
+  <link rel="apple-touch-icon" href="icons/icon-192.png" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="appbar">
+    <div class="brand">
+      <h1>Nonogram (Picross)</h1>
+    </div>
+  </header>
+
+  <!-- Controlli -->
+  <section class="controls panel" role="region" aria-label="Controlli">
+    <div class="controls">
+      <label for="preset">Preset:</label>
+      <select id="preset">
+        <option value="5x5-heart" selected>5×5 • Cuore</option>
+        <option value="10x10-smile">10×10 • Smile</option>
+        <option value="15x10-rocket">15×10 • Razzo</option>
+        <option value="custom">Custom JSON…</option>
+      </select>
+
+      <button id="newBtn" class="ghost" type="button">Carica</button>
+      <button id="clearBtn" class="ghost" type="button">Svuota</button>
+      <button id="checkBtn" class="ghost" type="button">Verifica</button>
+      <button id="hintBtn" class="ghost" type="button">Deduci</button>
+      <button id="solveBtn" class="ghost" type="button">Risolvi</button>
+    </div>
+
+    <p id="status" class="status">Pronto.</p>
+  </section>
+
+  <!-- Campo di gioco -->
+  <main class="playfield">
+    <div class="board-wrap">
+      <!-- Colonne (sopra) -->
+      <div id="colClues" class="clues cols" aria-hidden="true"></div>
+
+      <div class="grid-wrap">
+        <!-- Righe (sinistra) -->
+        <div id="rowClues" class="clues rows" aria-hidden="true"></div>
+
+        <!-- Griglia -->
+        <div id="board" class="board" role="grid" aria-label="Griglia Nonogram"></div>
+      </div>
+    </div>
+
+    <!-- Editor JSON custom -->
+    <section id="jsonPanel" class="json-panel" hidden>
+      <h3>Carica puzzle da JSON</h3>
+      <p>Formato: <code>{ "w":10, "h":10, "rows":[[...], ...], "cols":[[...], ...] }</code></p>
+      <textarea id="jsonInput" rows="8" spellcheck="false"></textarea>
+      <div class="controls">
+        <button id="applyJson" class="ghost">Applica</button>
+        <button id="cancelJson" class="ghost">Annulla</button>
+      </div>
+    </section>
+  </main>
+
+  <script src="script.js" defer></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('./service-worker.js').catch(()=>{});
+    }
+  </script>
+</body>
+</html>
