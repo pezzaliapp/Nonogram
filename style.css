@@ -1,90 +1,59 @@
+/* Nonogram PWA — PezzaliAPP */
 :root{
-  color-scheme: dark;
-  --bg:#0b1220;
-  --fg:#e7e7ef;
-  --panel:#0f1a33;
-  --accent:#3b82f6;
-  --good:#22c55e;
-  --bad:#ef4444;
-  --grid:#0e172b;
-  --grid-dark:#0c1425;
-  --cell: 34px;            /* lato cella (desktop) */
-  --gap: 4px;
+  --bg:#0f172a; --card:#111827; --ink:#e5e7eb; --muted:#9ca3af; --accent:#22c55e; --line:#1f2937; --warn:#ef4444;
 }
-
 *{box-sizing:border-box}
-html,body{margin:0;background:var(--bg);color:var(--fg);font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
-
-/* Appbar */
-.appbar{position:sticky;top:0;z-index:20;background:var(--bg);border-bottom:1px solid #142346;padding:.75rem 1rem}
-.appbar h1{margin:0;font-size:clamp(18px,2.2vw,28px)}
-
-/* Controls */
-.controls.panel{
-  position:sticky;top:56px;z-index:15;background:var(--bg);
-  display:flex;flex-wrap:wrap;align-items:center;gap:.5rem .6rem;
-  padding:.6rem 1rem;border-bottom:1px solid #142346;
+html,body{height:100%}
+body{
+  margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,'Helvetica Neue',Arial;
+  background:var(--bg); color:var(--ink); display:flex; flex-direction:column; gap:.5rem;
 }
-.controls .status{margin-left:.5rem;opacity:.9}
-
-button, select{font-size:16px;line-height:1.15}
-button{font-weight:700;letter-spacing:.2px;padding:10px 14px;border-radius:10px;border:1px solid #223055;background:#101b36;color:var(--fg)}
-button.ghost{background:#fff;color:#0f172a;border:1px solid var(--accent)}
-button.ghost:hover{background:#f1f5f9;border-color:#2563eb}
-select{padding:.45rem .6rem;border-radius:10px;border:1px solid #223055;background:#101b36;color:var(--fg)}
-
-/* Playfield layout */
-.playfield{padding:1rem;display:grid;gap:.6rem}
-.col-clues{
-  display:grid;grid-auto-rows:minmax(0,auto);grid-template-columns: repeat(var(--w,10), var(--cell));
-  justify-content:flex-start;gap:var(--gap);
-  padding-left:calc(var(--cell) * 5 + var(--gap) * 5); /* spazio per le row clues (max 5 numeri) */
+header{display:flex; align-items:center; justify-content:space-between; padding:.75rem 1rem}
+h1{margin:0; font-size:1.2rem; letter-spacing:.2px}
+.brand{opacity:.7}
+.toolbar{
+  display:flex; gap:1rem; align-items:center; flex-wrap:wrap; padding:0 1rem .5rem 1rem;
 }
-.grid-wrap{display:grid;grid-template-columns:auto 1fr;gap:.6rem;align-items:start}
-
-/* Clues */
-.row-clues{display:grid;grid-template-rows:repeat(var(--h,10), var(--cell));gap:var(--gap)}
-.clue{
-  min-width:calc(var(--cell) * 5 + var(--gap) * 4);
-  display:flex;gap:6px;align-items:center;justify-content:flex-end;
-  opacity:.95
+.toolbar .buttons{display:flex; gap:.5rem; flex-wrap:wrap}
+button{
+  background:#0b1220; color:var(--ink); border:1px solid var(--line); border-radius:.5rem; padding:.5rem .7rem;
+  cursor:pointer; font-weight:600
 }
-.clue.empty{opacity:.5}
-.col-clues .clue{flex-direction:column;gap:2px;justify-content:flex-end;align-items:center}
+button.primary{border-color:var(--accent)}
+button:disabled{opacity:.5; cursor:not-allowed}
+.importLabel{display:inline-flex; align-items:center; gap:.4rem}
+.importLabel input{display:none}
 
-/* Board */
-.board{
-  --w:10; --h:10;
-  display:grid;
-  grid-template-columns:repeat(var(--w), var(--cell));
-  grid-auto-rows:var(--cell);
-  gap:var(--gap);
-  background:var(--panel);
-  padding:6px;border-radius:12px;border:1px solid #1a2a4d;
-  user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;touch-action:none;
+#game{
+  position:relative; display:grid; grid-template-columns:auto 1fr; grid-template-rows:auto 1fr;
+  gap:4px; padding:0 1rem 1rem 1rem; height:100%; min-height:0;
 }
-.cell{background:var(--grid);border-radius:6px;box-shadow:inset 0 0 0 1px #172341}
-.cell.dark{background:var(--grid-dark)}
-.cell.fill{background:linear-gradient(180deg,#1fb36c,#159556)}
-.cell.cross{position:relative}
-.cell.cross::before,.cell.cross::after{
-  content:"";position:absolute;left:6px;right:6px;top:50%;height:2px;background:#cbd5e1;opacity:.8;transform:rotate(45deg)
-}
-.cell.cross::after{transform:rotate(-45deg)}
+#colClues{grid-column:2; grid-row:1; display:flex; align-items:end; gap:2px; overflow:auto; max-height:30vh}
+#rowClues{grid-column:1; grid-row:2; display:flex; flex-direction:column; gap:2px; overflow:auto}
+#board{grid-column:2; grid-row:2; position:relative; overflow:auto; border:1px solid var(--line); background:var(--card)}
 
-/* JSON dialog */
-dialog{border:none;border-radius:14px;background:#0f1a33;color:var(--fg);padding:0;max-width:min(760px,92vw)}
-.json-form{padding:1rem;display:grid;gap:.6rem}
-.json-form .hint{opacity:.85;margin:.25rem 0}
-textarea{width:100%;min-height:240px;border-radius:12px;border:1px solid #223055;background:#0b1326;color:var(--fg);padding:.6rem;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,"Courier New",monospace}
-.actions{display:flex;gap:.5rem;justify-content:flex-end}
+.clues .cstack{display:flex; flex-direction:column; justify-content:end; align-items:center; gap:3px; padding:4px}
+.clues .rstack{display:flex; flex-direction:row; align-items:center; gap:6px; padding:4px}
+.clues .num{font-variant-numeric:tabular-nums; color:var(--muted); font-size:.9rem}
+.clues .num.strong{color:var(--ink)}
 
-/* Responsive */
-@media (max-width:900px){
-  :root{ --cell: 30px }
-  .controls.panel{top:52px}
+.boardgrid{display:grid}
+.cell{
+  width:28px; height:28px; border:1px solid var(--line); display:grid; place-items:center; user-select:none;
+  touch-action:manipulation; font-weight:800; font-size:16px;
 }
+.cell.full{background:var(--accent); color:#0b1220}
+.cell.x{color:var(--muted)}
+.cell.hint{outline:2px solid #f59e0b; outline-offset:-2px; animation:blink 1s ease-in-out 2}
+@keyframes blink{0%,100%{outline-color:transparent}50%{outline-color:#f59e0b}}
+
+.howto{margin:0 1rem 1rem 1rem}
+.howto summary{cursor:pointer}
+.chip{display:inline-block; padding:.05rem .35rem; border-radius:.35rem; border:1px solid var(--line)}
+.chip.full{background:var(--accent); color:#0b1220}
+.chip.x{color:var(--muted)}
+
+footer{padding:0 1rem 1rem 1rem; opacity:.7}
 @media (max-width:600px){
-  :root{ --cell: 26px; --gap: 3px }
-  .col-clues{padding-left:calc(var(--cell) * 4 + var(--gap) * 4)} /* meno spazio per numeri corti */
+  .cell{width:24px; height:24px; font-size:14px}
 }

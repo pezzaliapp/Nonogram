@@ -1,71 +1,70 @@
 <!doctype html>
 <html lang="it">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Nonogram (Picross)</title>
-  <meta name="theme-color" content="#0b1220" />
-  <link rel="manifest" href="manifest.json" />
-  <link rel="icon" href="icons/favicon.ico" />
-  <link rel="apple-touch-icon" href="icons/icon-192.png" />
-  <link rel="stylesheet" href="style.css" />
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Nonogram — PezzaliAPP</title>
+  <meta name="theme-color" content="#0f172a">
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" type="image/png" href="icons/icon-192.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Nonogram">
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <header class="appbar">
-    <h1>Nonogram (Picross)</h1>
+  <header>
+    <h1>Nonogram <span class="brand">— PezzaliAPP</span></h1>
+    <button id="installBtn" hidden>Installa</button>
   </header>
 
-  <main class="app">
-    <!-- Barra comandi -->
-    <section class="controls panel">
-      <label for="preset">Preset:</label>
+  <section class="toolbar">
+    <label>Schema:
       <select id="preset">
-        <option value="5x5-heart">5×5 • Cuore</option>
-        <option value="10x10-smile">10×10 • Smile</option>
-        <option value="15x10-rocket">15×10 • Razzo</option>
-        <option value="custom">Custom JSON…</option>
+        <option value="heart10">♥ Cuore 10×10 (facile)</option>
+        <option value="smile10">☺ Smile 10×10 (medio)</option>
+        <option value="cat15">🐱 Gattino 15×15 (medio)</option>
       </select>
+    </label>
+    <div class="buttons">
+      <button id="newBtn" class="primary">Nuovo</button>
+      <button id="clearBtn">Pulisci</button>
+      <button id="deduceBtn">Deduci</button>
+      <button id="hintBtn">Suggerimento</button>
+      <button id="solveBtn">Risolvi</button>
+      <button id="checkBtn">Controlla</button>
+      <button id="exportBtn">Esporta</button>
+      <label class="importLabel">
+        Importa <input id="importInput" type="file" accept="application/json">
+      </label>
+    </div>
+  </section>
 
-      <button id="newBtn"   class="ghost">Carica</button>
-      <button id="clearBtn" class="ghost">Svuota</button>
-      <button id="checkBtn" class="ghost">Verifica</button>
-      <button id="hintBtn"  class="ghost">Deduci</button>
-      <button id="solveBtn" class="ghost">Risolvi</button>
-
-      <span id="status" class="status"></span>
-    </section>
-
-    <!-- Campo di gioco -->
-    <section class="playfield">
-      <!-- indizi colonne in alto -->
-      <div id="colClues" class="col-clues"></div>
-
-      <!-- indizi righe a sinistra + griglia -->
-      <div class="grid-wrap">
-        <div id="rowClues" class="row-clues"></div>
-        <div id="board" class="board"></div>
-      </div>
-    </section>
+  <main id="game">
+    <div id="colClues" class="clues col"></div>
+    <div id="rowClues" class="clues row"></div>
+    <div id="board" class="board" aria-label="griglia nonogram"></div>
   </main>
 
-  <!-- Pannello JSON custom -->
-  <dialog id="jsonPanel">
-    <form method="dialog" class="json-form">
-      <h3>Carica puzzle da JSON</h3>
-      <p class="hint">Formato: {"w":5,"h":5,"rows":[[1,1],...],"cols":[[1],...]}</p>
-      <textarea id="jsonInput" rows="12" spellcheck="false"></textarea>
-      <div class="actions">
-        <button id="applyJson" class="ghost" value="apply">Applica</button>
-        <button id="cancelJson" value="cancel">Annulla</button>
-      </div>
-    </form>
-  </dialog>
+  <details class="howto">
+    <summary>Come si gioca</summary>
+    <div class="howto-body">
+      <p>I Nonogram (griddlers, crucipixel) sono puzzle di logica: colora le celle per rivelare
+      un'immagine. I numeri a lato indicano quanti gruppi di celle piene compaiono in ciascuna riga/colonna.</p>
+      <ul>
+        <li><b>Tap/click</b> → Vuoto → <span class="chip full">Pieno</span> → <span class="chip x">X</span> → Vuoto</li>
+        <li><b>Doppio tap</b> → <span class="chip x">X</span> immediato</li>
+        <li><b>Deduci</b> applica la logica linea-per-linea (intersezione delle configurazioni valide).</li>
+        <li><b>Suggerimento</b> fa una singola deduzione e la evidenzia.</li>
+        <li><b>Risolvi</b> usa deduzioni + backtracking (trova 1 soluzione compatibile).</li>
+      </ul>
+    </div>
+  </details>
 
-  <script src="script.js" defer></script>
-  <script>
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('./service-worker.js');
-    }
-  </script>
+  <footer>
+    <small>Gratuito, open source. Funziona offline. • MIT © PezzaliAPP</small>
+  </footer>
+
+  <script src="script.js"></script>
 </body>
 </html>

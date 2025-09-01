@@ -1,14 +1,8 @@
-/* Nonogram (Picross) — PWA in una cartella
-   Interazione:
-   - Tap/click: alterna Vuoto → Pieno → X → Vuoto
-   - Doppio tap: X immediato
-   - “Deduci”: applica line-solver (intersezione delle configurazioni valide per riga/colonna)
-   - “Risolvi”: deduzioni + backtracking (1 soluzione)
-*/
+/* Nonogram PWA — PezzaliAPP */
 document.addEventListener('DOMContentLoaded', () => {
   'use strict';
 
-  // --- DOM ---
+  // --- DOM refs ---
   const boardEl   = document.getElementById('board');
   const rowCluesEl= document.getElementById('rowClues');
   const colCluesEl= document.getElementById('colClues');
@@ -17,379 +11,484 @@ document.addEventListener('DOMContentLoaded', () => {
   const clearBtn  = document.getElementById('clearBtn');
   const checkBtn  = document.getElementById('checkBtn');
   const hintBtn   = document.getElementById('hintBtn');
+  const deduceBtn = document.getElementById('deduceBtn');
   const solveBtn  = document.getElementById('solveBtn');
-  const statusEl  = document.getElementById('status');
+  const exportBtn = document.getElementById('exportBtn');
+  const importInput = document.getElementById('importInput');
+  const installBtn = document.getElementById('installBtn');
 
-  const jsonPanel = document.getElementById('jsonPanel');
-  const jsonInput = document.getElementById('jsonInput');
-  const applyJson = document.getElementById('applyJson');
-  const cancelJson= document.getElementById('cancelJson');
+  // --- State ---
+  let grid = [];      // 0=unknown, 1=full, -1=x
+  let rowClues = [];
+  let colClues = [];
+  let R = 0, C = 0;
 
-  const setStatus = (t) => { statusEl.textContent = t; };
-
-  // --- Stato ---
-  // 0 = ignoto, 1 = pieno, -1 = X (vuoto)
-  let W=10, H=10;
-  let rows=[], cols=[];
-  let grid=[]; // array H x W (flat)
-
-  // --- Preset semplici ---
+  // --- Presets defined as images (strings), then converted to clues ---
   const PRESETS = {
-    "5x5-heart": {
-      w:5, h:5,
-      rows: [[1,1],[3],[5],[3],[1]],
-      cols: [[1],[3],[5],[3],[1]]
-    },
-    "10x10-smile": {
-      w:10, h:10,
-      rows: [[2,2],[2,2],[10],[2,2],[2,2],[2,2],[10],[3,3],[2,2],[2,2]],
-      cols: [[2,2],[2,2],[10],[2,2],[2,2],[2,2],[10],[3,3],[2,2],[2,2]]
-    },
-    "15x10-rocket": {
-      w:15, h:10,
-      rows: [[3],[5],[3,3],[3,3],[15],[5,5],[3,3],[3,3],[5],[3]],
-      cols: [[1],[3],[5],[7],[9],[11],[13],[15],[11],[9],[7],[5],[3],[1],[1]]
-    }
+    heart10: [
+      "....##....",
+      "...####...",
+      "..######..",
+      ".########.",
+      ".########.",
+      ".########.",
+      "..######..",
+      "...####...",
+      "....##....",
+      ".....#....",
+    ],
+    smile10: [
+      "..........",
+      "..######..",
+      ".#......#.",
+      "#.#....#.#",
+      "#........#",
+      "#.#.##.#.#",
+      "#........#",
+      ".#.#..#.#.",
+      "..#....#..",
+      "..........",
+    ],
+    cat15: [
+      "...###......#..",
+      "..#####....###.",
+      "..#####....###.",
+      "...###.....###.",
+      ".....##..######",
+      "......#########",
+      "..#############",
+      ".##############",
+      "###############",
+      "###############",
+      "###############",
+      ".##############",
+      "..#############",
+      "...###########.",
+      ".....#######...",
+    ],
   };
 
-  // --- Utilità ---
-  const idx = (r,c)=> r*W + c;
-  const inb = (r,c)=> r>=0 && r<H && c>=0 && c<W;
+  function imgToClues(img) {
+    const R = img.length, C = img[0].length;
+    const rows = [];
+    const cols = Array.from({length:C}, () => []);
+    for (let r=0;r<R;r++){
+      const row = [];
+      let count=0;
+      for (let c=0;c<C;c++){
+        if (img[r][c] === '#') count++;
+        else { if (count>0){ row.push(count); count=0; } }
+      }
+      if (count>0) row.push(count);
+      rows.push(row.length?row:[0]);
+    }
+    for (let c=0;c<C;c++){
+      const col = [];
+      let count=0;
+      for (let r=0;r<R;r++){
+        if (img[r][c] === '#') count++;
+        else { if (count>0){ col.push(count); count=0; } }
+      }
+      if (count>0) col.push(count);
+      cols[c] = col.length?col:[0];
+    }
+    return {rows, cols};
+  }
 
-  function resetGrid(){
-    grid = new Array(W*H).fill(0);
+  function resetFromPreset(key){
+    const img = PRESETS[key];
+    const clues = imgToClues(img);
+    rowClues = clues.rows;
+    colClues = clues.cols;
+    R = rowClues.length;
+    C = colClues.length;
+    grid = Array.from({length:R}, () => Array(C).fill(0));
+    renderAll();
+  }
+
+  // --- Rendering ---
+  function renderAll(){
+    renderClues();
+    renderBoard();
   }
 
   function renderClues(){
-    // righe
-    rowCluesEl.style.setProperty('--h', H);
+    // Row clues
     rowCluesEl.innerHTML = '';
-    for (let r=0;r<H;r++){
-      const div = document.createElement('div');
-      div.className = 'clue' + (rows[r].length? '' : ' empty');
-      rows[r].forEach(n => {
-        const s = document.createElement('span'); s.textContent = n;
-        div.appendChild(s);
+    for (let r=0;r<R;r++){
+      const wrap = document.createElement('div');
+      wrap.className = 'rstack';
+      (rowClues[r].length===1 && rowClues[r][0]===0 ? ['0'] : rowClues[r].map(n=>String(n))).forEach((txt,i)=>{
+        const n = document.createElement('div');
+        n.className = 'num' + (i===rowClues[r].length-1 ? ' strong' : '');
+        n.textContent = txt;
+        wrap.appendChild(n);
       });
-      rowCluesEl.appendChild(div);
+      rowCluesEl.appendChild(wrap);
     }
-    // colonne
-    colCluesEl.style.setProperty('--w', W);
+    // Column clues
     colCluesEl.innerHTML = '';
-    for (let c=0;c<W;c++){
-      const div = document.createElement('div');
-      div.className = 'clue' + (cols[c].length? '' : ' empty');
-      div.style.display = 'flex';
-      div.style.flexDirection = 'column';
-      div.style.alignItems = 'center';
-      cols[c].forEach(n => {
-        const s = document.createElement('span'); s.textContent = n;
-        div.appendChild(s);
+    for (let c=0;c<C;c++){
+      const wrap = document.createElement('div');
+      wrap.className = 'cstack';
+      (colClues[c].length===1 && colClues[c][0]===0 ? ['0'] : colClues[c].map(n=>String(n))).forEach((txt,i)=>{
+        const n = document.createElement('div');
+        n.className = 'num' + (i===colClues[c].length-1 ? ' strong' : '');
+        n.textContent = txt;
+        wrap.appendChild(n);
       });
-      colCluesEl.appendChild(div);
+      colCluesEl.appendChild(wrap);
     }
   }
 
   function renderBoard(){
-    boardEl.style.setProperty('--w', W);
-    boardEl.style.setProperty('--h', H);
     boardEl.innerHTML = '';
-    for (let r=0;r<H;r++){
-      for (let c=0;c<W;c++){
+    const g = document.createElement('div');
+    g.className = 'boardgrid';
+    g.style.gridTemplateColumns = `repeat(${C}, 1fr)`;
+    g.style.width = `${Math.min(32*C, 28*C+8)}px`; // responsive-ish
+    for (let r=0;r<R;r++){
+      for (let c=0;c<C;c++){
         const cell = document.createElement('div');
-        cell.className = 'cell' + (((r+c)%2===1)?' dark':'');
-        const k = idx(r,c);
-        setCellClass(cell, grid[k]);
-
-        // Tap/click + doppio tap
-        let lastTap = 0;
-        cell.addEventListener('click', () => {
-          const now = Date.now();
-          if (now - lastTap < 260) {
-            grid[k] = -1;                 // doppio tap → X
-          } else {
-            grid[k] = (grid[k]===0) ? 1 : (grid[k]===1 ? -1 : 0);
-          }
-          lastTap = now;
-          setCellClass(cell, grid[k]);
-        });
-
-        // drag “pittura” (desktop)
-        cell.addEventListener('pointerdown', (e)=>{
-          e.preventDefault();
-          const startVal = (grid[k]===1) ? -1 : 1; // alterna rapido
-          const paint = (rr,cc)=>{
-            if (!inb(rr,cc)) return;
-            const kk=idx(rr,cc);
-            grid[kk] = startVal;
-            const el = boardEl.children[kk];
-            setCellClass(el, grid[kk]);
-          };
-          paint(r,c);
-          const move = (ev)=>{
-            const rect = boardEl.getBoundingClientRect();
-            const x = ev.clientX, y=ev.clientY;
-            const col = Math.floor((x - rect.left)/ (rect.width/W));
-            const row = Math.floor((y - rect.top)/ (rect.height/H));
-            paint(row,col);
-          };
-          const up = ()=>{
-            window.removeEventListener('pointermove', move);
-            window.removeEventListener('pointerup', up);
-          };
-          window.addEventListener('pointermove', move, {passive:true});
-          window.addEventListener('pointerup', up, {passive:true});
-        }, {passive:false});
-
-        boardEl.appendChild(cell);
+        cell.className = 'cell' + (grid[r][c]===1 ? ' full' : grid[r][c]===-1 ? ' x' : '');
+        cell.dataset.r = r; cell.dataset.c = c;
+        cell.tabIndex = 0;
+        cell.addEventListener('click', onClickCell);
+        cell.addEventListener('dblclick', (e)=>{ e.preventDefault(); setCell(r,c,-1,true); });
+        g.appendChild(cell);
       }
     }
+    boardEl.appendChild(g);
   }
 
-  function setCellClass(el, v){
-    el.classList.remove('fill','cross');
-    if (v===1) el.classList.add('fill');
-    else if (v===-1) el.classList.add('cross');
-  }
-
-  /* ---------- Line solver + deduzioni ---------- */
-
-  // Tutte le configurazioni valide (0/1) per una linea con blocchi e stato parziale (-1/0/1)
-  function lineConfigurations(length, blocks, partial){
-    const totalFilled = blocks.reduce((a,b)=>a+b,0);
-    const minSpaces = blocks.length > 0 ? (blocks.length - 1) : 0;
-    const need = totalFilled + minSpaces;
-    if (blocks.length===0){
-      for (let i=0;i<length;i++) if (partial[i]===1) return [];
-      return [ new Array(length).fill(0) ];
+  function setCell(r,c,val,highlight=false){
+    grid[r][c] = val;
+    const idx = r*C + c;
+    const cell = boardEl.querySelector('.boardgrid').children[idx];
+    cell.className = 'cell' + (val===1 ? ' full' : val===-1 ? ' x' : '');
+    if (highlight){
+      cell.classList.add('hint');
+      setTimeout(()=>cell.classList.remove('hint'), 1200);
     }
-    if (need > length) return [];
+  }
 
+  function onClickCell(e){
+    const r = +e.currentTarget.dataset.r;
+    const c = +e.currentTarget.dataset.c;
+    const cur = grid[r][c];
+    const nxt = cur===0 ? 1 : cur===1 ? -1 : 0;
+    setCell(r,c,nxt,false);
+  }
+
+  // --- Line logic: generate all placements for a line given clues and current states ---
+  // State: 0 unknown, 1 full, -1 x
+  function linePlacements(line, clues){
+    const N = line.length;
+    if (clues.length===1 && clues[0]===0){
+      // all must be X
+      if (line.every(v => v!==1)) return [Array(N).fill(-1)];
+      return []; // impossible if some is full
+    }
     const res = [];
-    function place(blockIdx, startPos, arr){
-      if (blockIdx === blocks.length){
-        for (let i=startPos;i<length;i++){
-          if (partial[i]===1) return;
-          arr[i]=0;
+    const totalBlocks = clues.reduce((a,b)=>a+b,0);
+    const minSpaces = clues.length - 1;
+    const minLen = totalBlocks + minSpaces;
+
+    function place(idx, start, acc){
+      if (idx === clues.length){
+        // fill trailing Xs
+        const arr = acc.slice();
+        for (let i = arr.length; i<N; i++){
+          if (line[i]===1) return; // conflict (must not be full)
+          arr[i] = -1;
         }
-        res.push(arr.slice());
+        res.push(arr);
         return;
       }
-      const bLen = blocks[blockIdx];
-
-      for (let pos = startPos; pos + bLen <= length; pos++){
-        // zeri tra startPos e pos-1
-        let okZeros = true;
-        for (let z=startPos; z<pos; z++){
-          if (partial[z]===1){ okZeros=false; break; }
-          arr[z]=0;
+      const k = clues[idx];
+      for (let s = start; s + (clues.slice(idx).reduce((a,b)=>a+b,0)) + (clues.length-idx-1) <= N; s++){
+        // try placing block k at s
+        // ensure preceding cell is X (except at start)
+        const arr = acc.slice();
+        // leading Xs up to s
+        for (let i = arr.length; i < s; i++){
+          if (line[i]===1) { s = N; break; } // conflict; break outer loop by pushing s to end
+          arr[i] = -1;
         }
-        if (!okZeros) continue;
-
-        // blocco pieno
-        let ok=true;
-        for (let j=0;j<bLen;j++){
-          if (partial[pos+j]===-1){ ok=false; break; }
-          arr[pos+j]=1;
+        if (arr.length !== s) continue; // conflict advanced s, skip
+        // place k fulls
+        let ok = true;
+        for (let i=0;i<k;i++){
+          const pos = s+i;
+          if (pos>=N || line[pos]===-1) { ok=false; break; }
+          arr[pos] = 1;
         }
-        if (!ok){
-          for (let j=0;j<bLen;j++) arr[pos+j]=0;
-          continue;
+        if (!ok) continue;
+        // trailing X after block (if not last)
+        const after = s+k;
+        if (idx < clues.length-1){
+          if (after>=N || line[after]===1){ continue; }
+          arr[after] = -1;
+        } else {
+          // last block; remaining cells can be X
         }
-
-        // separatore se non ultimo blocco
-        let nextStart = pos+bLen;
-        if (blockIdx < blocks.length-1){
-          if (nextStart>=length){
-            for (let j=0;j<bLen;j++) arr[pos+j]=0;
-            continue;
-          }
-          if (partial[nextStart]===1){
-            for (let j=0;j<bLen;j++) arr[pos+j]=0;
-            continue;
-          }
-          arr[nextStart]=0;
-          nextStart++;
-        }
-
-        place(blockIdx+1, nextStart, arr);
-
-        // ripristina blocco
-        for (let j=0;j<bLen;j++) arr[pos+j]=0;
-        if (blockIdx < blocks.length-1) arr[pos+bLen]=0;
+        place(idx+1, after + (idx < clues.length-1 ? 1 : 0), arr);
       }
     }
-    place(0,0,new Array(length).fill(0));
-
+    // possible earliest start is 0, latest such that remaining fits
+    place(0, 0, []);
+    // filter to keep those fully consistent with line (no conflicts)
     return res.filter(arr=>{
-      for (let i=0;i<length;i++){
-        if (partial[i]===1 && arr[i]!==1) return false;
-        if (partial[i]===-1 && arr[i]!==0) return false;
+      for (let i=0;i<N;i++){
+        if (line[i]===1 && arr[i]!==1) return false;
+        if (line[i]===-1 && arr[i]===1) return false;
       }
       return true;
     });
   }
 
-  function deduceLine(length, blocks, partial){
-    const configs = lineConfigurations(length, blocks, partial);
-    if (configs.length===0) return {changed:false, impossible:true};
-    const out = partial.slice();
-    let changed=false;
-    for (let i=0;i<length;i++){
-      let all1=true, all0=true;
-      for (const conf of configs){
-        if (conf[i]!==1) all1=false;
-        if (conf[i]!==0) all0=false;
-        if (!all1 && !all0) break;
+  function intersectPlacements(placements){
+    if (placements.length===0) return null;
+    const N = placements[0].length;
+    const out = Array(N).fill(0);
+    for (let i=0;i<N;i++){
+      let v = placements[0][i];
+      let same = true;
+      for (let p=1;p<placements.length;p++){
+        if (placements[p][i] !== v){ same = false; break; }
       }
-      if (all1 && out[i]!==1){ out[i]=1; changed=true; }
-      else if (all0 && out[i]!==-1){ out[i]=-1; changed=true; }
+      out[i] = same ? v : 0;
     }
-    return { line: out, changed, impossible:false };
+    return out;
   }
 
-  const getRow = r => Array.from({length:W},(_,c)=>grid[idx(r,c)]);
-  const setRow = (r, a) => { for(let c=0;c<W;c++) grid[idx(r,c)]=a[c]; };
-  const getCol = c => Array.from({length:H},(_,r)=>grid[idx(r,c)]);
-  const setCol = (c, a) => { for(let r=0;r<H;r++) grid[idx(r,c)]=a[r]; };
+  function applyLineDeductions(){
+    // one pass on all rows then cols; returns list of changed cells [{r,c,val}]
+    const changes = [];
+    // rows
+    for (let r=0;r<R;r++){
+      const placements = linePlacements(grid[r], rowClues[r]);
+      if (placements.length===0) continue; // contradiction or nothing
+      const inter = intersectPlacements(placements);
+      for (let c=0;c<C;c++){
+        if (inter[c]!==0 && grid[r][c]!==inter[c]){
+          grid[r][c] = inter[c];
+          changes.push({r,c,val:inter[c]});
+        }
+      }
+    }
+    // cols
+    for (let c=0;c<C;c++){
+      const col = Array.from({length:R}, (_,r)=>grid[r][c]);
+      const placements = linePlacements(col, colClues[c]);
+      if (placements.length===0) continue;
+      const inter = intersectPlacements(placements);
+      for (let r=0;r<R;r++){
+        if (inter[r]!==0 && grid[r][c]!==inter[r]){
+          grid[r][c] = inter[r];
+          changes.push({r,c,val:inter[r]});
+        }
+      }
+    }
+    return changes;
+  }
 
-  function propagate(){
-    let changed=true;
-    while (changed){
-      changed=false;
-      for (let r=0;r<H;r++){
-        const d = deduceLine(W, rows[r], getRow(r));
-        if (d.impossible) return false;
-        if (d.changed){ setRow(r, d.line); changed=true; }
-      }
-      for (let c=0;c<W;c++){
-        const d = deduceLine(H, cols[c], getCol(c));
-        if (d.impossible) return false;
-        if (d.changed){ setCol(c, d.line); changed=true; }
-      }
+  function fullyConsistent(){
+    // check each row/col has at least one placement consistent
+    for (let r=0;r<R;r++){
+      if (linePlacements(grid[r], rowClues[r]).length===0) return false;
+    }
+    for (let c=0;c<C;c++){
+      const col = Array.from({length:R}, (_,r)=>grid[r][c]);
+      if (linePlacements(col, colClues[c]).length===0) return false;
     }
     return true;
   }
-  const isComplete = () => grid.every(v=>v!==0);
 
-  function chooseBranchLine(){
-    let best=null;
-    for (let r=0;r<H;r++){
-      const conf = lineConfigurations(W, rows[r], getRow(r));
-      if (conf.length===0) return {type:'row',idx:r,count:0,configs:[]};
-      if (conf.length>1 && (!best || conf.length<best.count)) best={type:'row',idx:r,count:conf.length,configs:conf};
+  function isSolved(){
+    // no unknowns and each line matches clues exactly
+    for (let r=0;r<R;r++){
+      if (!lineMatches(grid[r], rowClues[r])) return false;
     }
-    for (let c=0;c<W;c++){
-      const conf = lineConfigurations(H, cols[c], getCol(c));
-      if (conf.length===0) return {type:'col',idx:c,count:0,configs:[]};
-      if (conf.length>1 && (!best || conf.length<best.count)) best={type:'col',idx:c,count:conf.length,configs:conf};
+    for (let c=0;c<C;c++){
+      const col = Array.from({length:R}, (_,r)=>grid[r][c]);
+      if (!lineMatches(col, colClues[c])) return false;
     }
-    return best;
-  }
-  const snapshot = () => ({ grid: grid.slice() });
-  const restore  = s  => { grid = s.grid.slice(); };
-
-  function solve(limit=1){
-    if (!propagate()) return [];
-    const sols=[];
-    (function dfs(){
-      if (sols.length>=limit) return;
-      if (isComplete()){ sols.push(grid.slice()); return; }
-      const pick = chooseBranchLine();
-      if (!pick || pick.count===0) return;
-      const snap = snapshot();
-      for (const conf of pick.configs){
-        if (pick.type==='row') setRow(pick.idx, conf);
-        else setCol(pick.idx, conf);
-
-        if (propagate()){
-          dfs();
-          if (sols.length>=limit) return;
-        }
-        restore(snap);
-      }
-    })();
-    return sols;
+    return true;
   }
 
-  function checkConsistency(){
-    function lineOk(length, blocks, arr){
-      const seen=[]; let run=0;
-      for (let i=0;i<length;i++){
-        if (arr[i]===1) run++;
-        else { if (run>0){ seen.push(run); run=0; } }
+  function lineMatches(line, clues){
+    const groups = [];
+    let count=0;
+    for (let v of line){
+      if (v===1) count++;
+      else { if (count>0){ groups.push(count); count=0; } }
+    }
+    if (count>0) groups.push(count);
+    if (groups.length===0) groups.push(0);
+    // normalize zero case
+    const norm = (groups.length===1 && groups[0]===0) ? [0] : groups;
+    const target = (clues.length===1 && clues[0]===0) ? [0] : clues;
+    if (norm.length!==target.length) return false;
+    for (let i=0;i<norm.length;i++){
+      if (norm[i]!==target[i]) return false;
+    }
+    // also ensure no unknowns linger if any block present
+    if (line.some(v=>v===0)) return false;
+    return true;
+  }
+
+  function deduceLoop(){
+    let any=false;
+    while (true){
+      const changes = applyLineDeductions();
+      if (changes.length===0) break;
+      any = true;
+    }
+    renderBoard();
+    return any;
+  }
+
+  function hintOnce(){
+    const before = JSON.stringify(grid);
+    const changes = applyLineDeductions();
+    if (changes.length>0){
+      renderBoard();
+      for (const ch of changes){
+        // highlight only first batch; break after few
+        const idx = ch.r*C + ch.c;
+        const cell = boardEl.querySelector('.boardgrid').children[idx];
+        cell.classList.add('hint');
+        setTimeout(()=>cell.classList.remove('hint'), 1200);
       }
-      if (run>0) seen.push(run);
-      for (let i=0;i<seen.length;i++) if (seen[i] > (blocks[i]||Infinity)) return false;
-      if (seen.length > blocks.length) return false;
       return true;
     }
-    for (let r=0;r<H;r++) if (!lineOk(W, rows[r], getRow(r))) return false;
-    for (let c=0;c<W;c++) if (!lineOk(H, cols[c], getCol(c))) return false;
-    return true;
+    return false;
   }
 
-  /* ---------- UI ---------- */
-  newBtn.addEventListener('click', ()=>{
-    const v = presetSel.value;
-    if (v==='custom'){
-      jsonPanel.showModal();
-      jsonInput.value = JSON.stringify({ w: W, h: H, rows, cols }, null, 2);
-      setStatus('Incolla un JSON e premi “Applica”.');
-      return;
+  function solve(){
+    // first aggressive deductions
+    deduceLoop();
+    if (isSolved()) return true;
+
+    // choose a cell with ambiguity using heuristic: cell that appears same across row/col intersections?
+    // We'll pick first unknown that, when set, keeps consistency.
+    function cloneGrid(g){ return g.map(row=>row.slice()); }
+
+    function dfs(){
+      if (!fullyConsistent()) return false;
+      // deduce
+      let progress = true;
+      while (progress){
+        const changes = applyLineDeductions();
+        progress = changes.length>0;
+      }
+      if (!fullyConsistent()) return false;
+      if (isComplete()){
+        return isSolved();
+      }
+      // pick first unknown with some constraints
+      let r=-1,c=-1;
+      outer: for (let i=0;i<R;i++){
+        for (let j=0;j<C;j++){
+          if (grid[i][j]===0){ r=i; c=j; break outer; }
+        }
+      }
+      if (r===-1) return isSolved();
+      const snapshot = cloneGrid(grid);
+
+      // try fill
+      grid[r][c]=1;
+      if (dfs()) return true;
+
+      // backtrack & try X
+      grid = cloneGrid(snapshot);
+      grid[r][c] = -1;
+      if (dfs()) return true;
+
+      // neither works
+      grid = cloneGrid(snapshot);
+      return false;
     }
-    const p = PRESETS[v];
-    W=p.w; H=p.h; rows=p.rows.map(a=>a.slice()); cols=p.cols.map(a=>a.slice());
-    resetGrid(); renderClues(); renderBoard();
-    setStatus('Preset caricato.');
-  });
 
-  clearBtn.addEventListener('click', ()=>{
-    resetGrid(); renderBoard();
-    setStatus('Griglia svuotata.');
-  });
+    function isComplete(){
+      for (let i=0;i<R;i++){
+        for (let j=0;j<C;j++){
+          if (grid[i][j]===0) return false;
+        }
+      }
+      return true;
+    }
 
-  checkBtn.addEventListener('click', ()=>{
-    const ok = checkConsistency();
-    setStatus(ok ? '✅ Coerente finora.' : '⛔ Incoerente con gli indizi.');
-  });
-
-  hintBtn.addEventListener('click', ()=>{
-    const before = grid.slice();
-    const ok = propagate();
-    if (!ok){ setStatus('⛔ Contraddizione: controlla le X/riempimenti.'); renderBoard(); return; }
+    const ok = dfs();
     renderBoard();
-    const changed = before.some((v,i)=> v!==grid[i]);
-    setStatus(changed ? '✨ Deduzioni applicate.' : 'ℹ️ Nessuna deduzione trovata.');
-  });
+    return ok;
+  }
 
+  // --- Export/Import ---
+  function exportJSON(){
+    const data = { grid, rowClues, colClues };
+    const blob = new Blob([JSON.stringify(data)], {type:'application/json'});
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'nonogram.json';
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+
+  function importJSON(file){
+    const rdr = new FileReader();
+    rdr.onload = () => {
+      try {
+        const obj = JSON.parse(rdr.result);
+        if (!obj || !obj.rowClues || !obj.colClues || !obj.grid) throw new Error('Formato non valido');
+        rowClues = obj.rowClues;
+        colClues = obj.colClues;
+        R = rowClues.length; C = colClues.length;
+        grid = obj.grid;
+        renderAll();
+      } catch(e){
+        alert('Errore import: ' + e.message);
+      }
+    };
+    rdr.readAsText(file);
+  }
+
+  // --- Wiring buttons ---
+  newBtn.addEventListener('click', ()=> resetFromPreset(presetSel.value));
+  clearBtn.addEventListener('click', ()=>{
+    grid = Array.from({length:R}, () => Array(C).fill(0));
+    renderBoard();
+  });
+  deduceBtn.addEventListener('click', ()=> deduceLoop());
+  hintBtn.addEventListener('click', ()=>{
+    if (!hintOnce()) alert('Nessuna deduzione immediata trovata.');
+  });
   solveBtn.addEventListener('click', ()=>{
-    const sols = solve(1);
-    if (!sols.length){ setStatus('😕 Nessuna soluzione trovata.'); return; }
-    grid = sols[0].slice();
-    renderBoard(); setStatus('✅ Soluzione applicata.');
+    const ok = solve();
+    if (!ok) alert('Nessuna soluzione trovata o puzzle ambiguo.');
+  });
+  checkBtn.addEventListener('click', ()=>{
+    alert(isSolved() ? '✅ Risolto correttamente!' : '❌ Non ancora corretto.');
+  });
+  exportBtn.addEventListener('click', exportJSON);
+  importInput.addEventListener('change', (e)=>{
+    if (e.target.files && e.target.files[0]) importJSON(e.target.files[0]);
+    e.target.value = '';
   });
 
-  applyJson.addEventListener('click', ()=>{
-    try{
-      const obj = JSON.parse(jsonInput.value);
-      if (!obj || !Array.isArray(obj.rows) || !Array.isArray(obj.cols)) throw 0;
-      W = obj.w|0; H = obj.h|0;
-      rows = obj.rows.map(a=>a.slice());
-      cols = obj.cols.map(a=>a.slice());
-      jsonPanel.close();
-      resetGrid(); renderClues(); renderBoard();
-      setStatus('Puzzle custom caricato.');
-    }catch(e){
-      setStatus('⛔ JSON non valido.');
-    }
+  // --- PWA install prompt handling ---
+  let deferredPrompt = null;
+  window.addEventListener('beforeinstallprompt', (e)=>{
+    e.preventDefault(); deferredPrompt = e; installBtn.hidden = false;
   });
-  cancelJson.addEventListener('click', ()=>{ jsonPanel.close(); setStatus(''); });
+  installBtn.addEventListener('click', async ()=>{
+    if (!deferredPrompt) return;
+    deferredPrompt.prompt();
+    await deferredPrompt.userChoice;
+    deferredPrompt = null; installBtn.hidden = true;
+  });
 
-  // Avvio
-  (function init(){
-    const p = PRESETS[presetSel.value];
-    W=p.w; H=p.h; rows=p.rows.map(a=>a.slice()); cols=p.cols.map(a=>a.slice());
-    resetGrid(); renderClues(); renderBoard();
-  })();
+  // init
+  resetFromPreset(presetSel.value);
 });
