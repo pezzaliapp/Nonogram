@@ -1,4 +1,4 @@
-/* Nonogram PWA — PezzaliAPP (zoom + theme) */
+/* Nonogram PWA — PezzaliAPP (zoom + theme + scroll sync) */
 document.addEventListener('DOMContentLoaded', () => {
   'use strict';
 
@@ -29,7 +29,7 @@ document.addEventListener('DOMContentLoaded', () => {
     localStorage.setItem('nonogram-theme', theme);
   }
   const savedTheme = localStorage.getItem('nonogram-theme');
-  applyTheme(savedTheme || (prefersDark ? '' : 'light')); // '' means dark vars (root default)
+  applyTheme(savedTheme || (prefersDark ? '' : 'light'));
   themeBtn.addEventListener('click', ()=>{
     const current = document.documentElement.getAttribute('data-theme');
     applyTheme(current === 'light' ? '' : 'light');
@@ -40,6 +40,14 @@ document.addEventListener('DOMContentLoaded', () => {
   let rowClues = [];
   let colClues = [];
   let R = 0, C = 0;
+
+  // Inner wrappers for scroll syncing
+  const colInner = document.createElement('div');
+  colInner.className = 'inner';
+  const rowInner = document.createElement('div');
+  rowInner.className = 'inner';
+  colCluesEl.appendChild(colInner);
+  rowCluesEl.appendChild(rowInner);
 
   // --- Presets defined as images (strings), then converted to clues ---
   const PRESETS = {
@@ -131,6 +139,8 @@ document.addEventListener('DOMContentLoaded', () => {
     zoomRange.value = String(cell);
     zoomVal.textContent = `${cell}px`;
     localStorage.setItem('nonogram-cell', String(cell));
+    // Update inner wrappers sizes via CSS grid (no extra work)
+    syncScroll(); // keep alignment after zoom
   }
 
   function resetFromPreset(key){
@@ -149,10 +159,11 @@ document.addEventListener('DOMContentLoaded', () => {
   function renderAll(){
     renderClues();
     renderBoard();
+    syncScroll();
   }
 
   function renderClues(){
-    rowCluesEl.innerHTML = '';
+    rowInner.innerHTML = '';
     for (let r=0;r<R;r++){
       const wrap = document.createElement('div');
       wrap.className = 'rstack';
@@ -162,9 +173,9 @@ document.addEventListener('DOMContentLoaded', () => {
         n.textContent = txt;
         wrap.appendChild(n);
       });
-      rowCluesEl.appendChild(wrap);
+      rowInner.appendChild(wrap);
     }
-    colCluesEl.innerHTML = '';
+    colInner.innerHTML = '';
     for (let c=0;c<C;c++){
       const wrap = document.createElement('div');
       wrap.className = 'cstack';
@@ -174,7 +185,7 @@ document.addEventListener('DOMContentLoaded', () => {
         n.textContent = txt;
         wrap.appendChild(n);
       });
-      colCluesEl.appendChild(wrap);
+      colInner.appendChild(wrap);
     }
   }
 
@@ -215,7 +226,7 @@ document.addEventListener('DOMContentLoaded', () => {
     setCell(r,c,nxt,false);
   }
 
-  // --- Line logic (same as before) ---
+  // --- Line logic (unchanged) ---
   function linePlacements(line, clues){
     const N = line.length;
     if (clues.length===1 && clues[0]===0){
@@ -467,13 +478,8 @@ document.addEventListener('DOMContentLoaded', () => {
   function setCellSize(px){ setCSSVars(px); }
   zoomRange.addEventListener('input', (e)=> setCellSize(parseInt(e.target.value,10)));
 
-  // Pinch gesture: adjust cell size by scale delta
   let pinch = {active:false, startDist:0, startCell:0};
-  function dist(t1,t2){
-    const dx = t1.clientX - t2.clientX;
-    const dy = t1.clientY - t2.clientY;
-    return Math.hypot(dx,dy);
-  }
+  function dist(t1,t2){ const dx=t1.clientX-t2.clientX, dy=t1.clientY-t2.clientY; return Math.hypot(dx,dy); }
   boardEl.addEventListener('touchstart', (e)=>{
     if (e.touches.length===2){
       pinch.active = true;
@@ -489,11 +495,8 @@ document.addEventListener('DOMContentLoaded', () => {
       setCellSize(newCell);
     }
   }, {passive:true});
-  boardEl.addEventListener('touchend', ()=>{
-    if (pinch.active) pinch.active=false;
-  });
+  boardEl.addEventListener('touchend', ()=>{ if (pinch.active) pinch.active=false; });
 
-  // Mouse wheel with Ctrl/Cmd for zoom
   boardEl.addEventListener('wheel', (e)=>{
     if (e.ctrlKey){
       e.preventDefault();
@@ -503,8 +506,16 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }, {passive:false});
 
-  // adapt on resize
-  window.addEventListener('resize', ()=> setCSSVars(), {passive:true});
+  // --- Scroll sync: keep numbers aligned with cells while panning/zooming ---
+  function syncScroll(){
+    // translate inner wrappers to mirror board scroll
+    const x = boardEl.scrollLeft;
+    const y = boardEl.scrollTop;
+    colInner.style.transform = `translateX(${-x}px)`;
+    rowInner.style.transform = `translateY(${-y}px)`;
+  }
+  boardEl.addEventListener('scroll', syncScroll, {passive:true});
+  window.addEventListener('resize', ()=>{ setCSSVars(); syncScroll(); }, {passive:true});
 
   // --- Wiring buttons ---
   newBtn.addEventListener('click', ()=> resetFromPreset(presetSel.value));

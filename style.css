@@ -1,4 +1,4 @@
-/* Nonogram PWA — PezzaliAPP (zoom + theme) */
+/* Nonogram PWA — PezzaliAPP (zoom + theme + scroll sync) */
 :root{
   --bg:#0f172a; --card:#111827; --ink:#e5e7eb; --muted:#9ca3af; --accent:#22c55e; --line:#1f2937;
   --cell:28px; --R:10; --C:10;
@@ -38,21 +38,27 @@ button:disabled{opacity:.5; cursor:not-allowed}
   position:relative; display:grid; grid-template-columns:auto 1fr; grid-template-rows:auto 1fr;
   gap:4px; padding:0 1rem 1rem 1rem; height:100%; min-height:0;
 }
+/* Clues containers share the same scroll area as the board */
 #colClues{
   grid-column:2; grid-row:1;
   display:grid; grid-auto-rows:max-content;
   grid-template-columns: repeat(var(--C), var(--cell));
-  align-items:end; gap:1px; overflow:auto; max-height:30vh;
+  align-items:end; gap:1px; overflow:hidden; /* hidden: we mirror board's scrollLeft */
+  max-height:30vh;
 }
 #rowClues{
   grid-column:1; grid-row:2;
   display:grid; grid-template-rows: repeat(var(--R), var(--cell));
-  align-content:start; gap:1px; overflow:auto;
+  align-content:start; gap:1px; overflow:hidden; /* hidden: we mirror board's scrollTop */
 }
 #board{
   grid-column:2; grid-row:2; position:relative; overflow:auto; border:1px solid var(--line); background:var(--card);
   touch-action:pan-x pan-y; /* pinch handled manually; allow panning */
 }
+
+/* Inner wrappers to allow translating clues to match scroll */
+#colClues .inner{display:grid; grid-template-columns: repeat(var(--C), var(--cell)); will-change:transform}
+#rowClues .inner{display:grid; grid-template-rows: repeat(var(--R), var(--cell)); will-change:transform}
 
 .clues .cstack{display:flex; flex-direction:column; justify-content:flex-end; align-items:center; gap:2px; padding:2px; width:var(--cell)}
 .clues .rstack{display:flex; flex-direction:row; align-items:center; gap:6px; padding:2px; height:var(--cell)}
