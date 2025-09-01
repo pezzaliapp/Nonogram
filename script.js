@@ -1,4 +1,4 @@
-/* Nonogram PWA — PezzaliAPP (aligned clues) */
+/* Nonogram PWA — PezzaliAPP (zoom + theme) */
 document.addEventListener('DOMContentLoaded', () => {
   'use strict';
 
@@ -16,6 +16,24 @@ document.addEventListener('DOMContentLoaded', () => {
   const exportBtn = document.getElementById('exportBtn');
   const importInput = document.getElementById('importInput');
   const installBtn = document.getElementById('installBtn');
+  const zoomRange = document.getElementById('zoomRange');
+  const zoomVal = document.getElementById('zoomVal');
+  const themeBtn = document.getElementById('themeBtn');
+  const themeColorMeta = document.getElementById('themeColor');
+
+  // --- Theme handling ---
+  const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+  function applyTheme(theme){
+    document.documentElement.setAttribute('data-theme', theme);
+    themeColorMeta.setAttribute('content', theme==='light' ? '#f4f6fb' : '#0f172a');
+    localStorage.setItem('nonogram-theme', theme);
+  }
+  const savedTheme = localStorage.getItem('nonogram-theme');
+  applyTheme(savedTheme || (prefersDark ? '' : 'light')); // '' means dark vars (root default)
+  themeBtn.addEventListener('click', ()=>{
+    const current = document.documentElement.getAttribute('data-theme');
+    applyTheme(current === 'light' ? '' : 'light');
+  });
 
   // --- State ---
   let grid = [];      // 0=unknown, 1=full, -1=x
@@ -95,14 +113,24 @@ document.addEventListener('DOMContentLoaded', () => {
     return {rows, cols};
   }
 
-  function setCSSVars(){
+  function setCSSVars(cellPx=null){
     const root = document.documentElement;
     root.style.setProperty('--R', R);
     root.style.setProperty('--C', C);
-    // responsive cell size: try to fit screen width (padding ~ 32 + clues area ~ 40%)
-    const maxBoardWidth = Math.max(280, Math.min(window.innerWidth - 40, 900));
-    const cell = Math.max(22, Math.min(48, Math.floor(maxBoardWidth / (C + 2))));
+    let cell = cellPx;
+    if (cell == null){
+      const saved = localStorage.getItem('nonogram-cell');
+      if (saved) cell = parseInt(saved,10);
+    }
+    if (!cell){
+      const maxBoardWidth = Math.max(280, Math.min(window.innerWidth - 40, 900));
+      cell = Math.max(22, Math.min(48, Math.floor(maxBoardWidth / (C + 2))));
+    }
+    cell = Math.max(18, Math.min(60, cell));
     root.style.setProperty('--cell', `${cell}px`);
+    zoomRange.value = String(cell);
+    zoomVal.textContent = `${cell}px`;
+    localStorage.setItem('nonogram-cell', String(cell));
   }
 
   function resetFromPreset(key){
@@ -124,7 +152,6 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function renderClues(){
-    // Row clues grid: one row per puzzle row
     rowCluesEl.innerHTML = '';
     for (let r=0;r<R;r++){
       const wrap = document.createElement('div');
@@ -137,7 +164,6 @@ document.addEventListener('DOMContentLoaded', () => {
       });
       rowCluesEl.appendChild(wrap);
     }
-    // Column clues grid: one column per puzzle col
     colCluesEl.innerHTML = '';
     for (let c=0;c<C;c++){
       const wrap = document.createElement('div');
@@ -425,6 +451,61 @@ document.addEventListener('DOMContentLoaded', () => {
     rdr.readAsText(file);
   }
 
+  // --- Install PWA prompt ---
+  let deferredPrompt = null;
+  window.addEventListener('beforeinstallprompt', (e)=>{
+    e.preventDefault(); deferredPrompt = e; installBtn.hidden = false;
+  });
+  installBtn.addEventListener('click', async ()=>{
+    if (!deferredPrompt) return;
+    deferredPrompt.prompt();
+    await deferredPrompt.userChoice;
+    deferredPrompt = null; installBtn.hidden = true;
+  });
+
+  // --- Zoom slider & pinch to zoom ---
+  function setCellSize(px){ setCSSVars(px); }
+  zoomRange.addEventListener('input', (e)=> setCellSize(parseInt(e.target.value,10)));
+
+  // Pinch gesture: adjust cell size by scale delta
+  let pinch = {active:false, startDist:0, startCell:0};
+  function dist(t1,t2){
+    const dx = t1.clientX - t2.clientX;
+    const dy = t1.clientY - t2.clientY;
+    return Math.hypot(dx,dy);
+  }
+  boardEl.addEventListener('touchstart', (e)=>{
+    if (e.touches.length===2){
+      pinch.active = true;
+      pinch.startDist = dist(e.touches[0], e.touches[1]);
+      pinch.startCell = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--cell'),10);
+    }
+  }, {passive:true});
+  boardEl.addEventListener('touchmove', (e)=>{
+    if (pinch.active && e.touches.length===2){
+      const d = dist(e.touches[0], e.touches[1]);
+      const scale = d / pinch.startDist;
+      const newCell = Math.round(pinch.startCell * scale);
+      setCellSize(newCell);
+    }
+  }, {passive:true});
+  boardEl.addEventListener('touchend', ()=>{
+    if (pinch.active) pinch.active=false;
+  });
+
+  // Mouse wheel with Ctrl/Cmd for zoom
+  boardEl.addEventListener('wheel', (e)=>{
+    if (e.ctrlKey){
+      e.preventDefault();
+      const cur = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--cell'),10);
+      const delta = e.deltaY>0 ? -2 : 2;
+      setCellSize(cur + delta);
+    }
+  }, {passive:false});
+
+  // adapt on resize
+  window.addEventListener('resize', ()=> setCSSVars(), {passive:true});
+
   // --- Wiring buttons ---
   newBtn.addEventListener('click', ()=> resetFromPreset(presetSel.value));
   clearBtn.addEventListener('click', ()=>{
@@ -447,21 +528,6 @@ document.addEventListener('DOMContentLoaded', () => {
     if (e.target.files && e.target.files[0]) importJSON(e.target.files[0]);
     e.target.value = '';
   });
-
-  // --- PWA install prompt handling ---
-  let deferredPrompt = null;
-  window.addEventListener('beforeinstallprompt', (e)=>{
-    e.preventDefault(); deferredPrompt = e; installBtn.hidden = false;
-  });
-  installBtn.addEventListener('click', async ()=>{
-    if (!deferredPrompt) return;
-    deferredPrompt.prompt();
-    await deferredPrompt.userChoice;
-    deferredPrompt = null; installBtn.hidden = true;
-  });
-
-  // adapt on resize
-  window.addEventListener('resize', setCSSVars, {passive:true});
 
   // init
   resetFromPreset(presetSel.value);

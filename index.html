@@ -1,10 +1,10 @@
 <!doctype html>
-<html lang="it">
+<html lang="it" data-theme="">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
   <title>Nonogram — PezzaliAPP</title>
-  <meta name="theme-color" content="#0f172a">
+  <meta name="theme-color" content="#0f172a" id="themeColor">
   <link rel="manifest" href="manifest.json">
   <link rel="icon" type="image/png" href="icons/icon-192.png">
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -15,7 +15,10 @@
 <body>
   <header>
     <h1>Nonogram <span class="brand">— PezzaliAPP</span></h1>
-    <button id="installBtn" hidden>Installa</button>
+    <div class="header-actions">
+      <button id="themeBtn" title="Tema chiaro/scuro">Tema</button>
+      <button id="installBtn" hidden>Installa</button>
+    </div>
   </header>
 
   <section class="toolbar">
@@ -38,6 +41,14 @@
         Importa <input id="importInput" type="file" accept="application/json">
       </label>
     </div>
+  </section>
+
+  <section class="toolbar second">
+    <label class="zoomLabel">Zoom:
+      <input id="zoomRange" type="range" min="18" max="60" step="1">
+      <span id="zoomVal"></span>
+    </label>
+    <span class="hint">Pinch a due dita per zoomare; trascina per scorrere.</span>
   </section>
 
   <main id="game">

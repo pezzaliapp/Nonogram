@@ -1,8 +1,10 @@
-/* Nonogram PWA — PezzaliAPP (aligned clues) */
+/* Nonogram PWA — PezzaliAPP (zoom + theme) */
 :root{
   --bg:#0f172a; --card:#111827; --ink:#e5e7eb; --muted:#9ca3af; --accent:#22c55e; --line:#1f2937;
-  --cell:28px; /* JS aggiorna questa variabile per adattare mobile/desktop */
-  --R:10; --C:10; /* JS aggiorna */
+  --cell:28px; --R:10; --C:10;
+}
+:root[data-theme="light"]{
+  --bg:#f4f6fb; --card:#ffffff; --ink:#0f172a; --muted:#6b7280; --accent:#16a34a; --line:#d1d5db;
 }
 *{box-sizing:border-box}
 html,body{height:100%}
@@ -11,20 +13,26 @@ body{
   background:var(--bg); color:var(--ink); display:flex; flex-direction:column; gap:.5rem;
 }
 header{display:flex; align-items:center; justify-content:space-between; padding:.75rem 1rem}
+.header-actions{display:flex; gap:.5rem}
 h1{margin:0; font-size:1.2rem; letter-spacing:.2px}
 .brand{opacity:.7}
 .toolbar{
   display:flex; gap:1rem; align-items:center; flex-wrap:wrap; padding:0 1rem .5rem 1rem;
 }
+.toolbar.second{padding-top:0}
 .toolbar .buttons{display:flex; gap:.5rem; flex-wrap:wrap}
 button{
-  background:#0b1220; color:var(--ink); border:1px solid var(--line); border-radius:.5rem; padding:.5rem .7rem;
+  background:#0b1220; color:#e5e7eb; border:1px solid var(--line); border-radius:.5rem; padding:.5rem .7rem;
   cursor:pointer; font-weight:600
 }
+:root[data-theme="light"] button{background:#f3f4f6; color:#111827}
 button.primary{border-color:var(--accent)}
 button:disabled{opacity:.5; cursor:not-allowed}
 .importLabel{display:inline-flex; align-items:center; gap:.4rem}
 .importLabel input{display:none}
+.zoomLabel{display:inline-flex; align-items:center; gap:.5rem}
+#zoomRange{width:220px}
+.hint{opacity:.7; font-size:.9rem}
 
 #game{
   position:relative; display:grid; grid-template-columns:auto 1fr; grid-template-rows:auto 1fr;
@@ -42,7 +50,8 @@ button:disabled{opacity:.5; cursor:not-allowed}
   align-content:start; gap:1px; overflow:auto;
 }
 #board{
-  grid-column:2; grid-row:2; position:relative; overflow:auto; border:1px solid var(--line); background:var(--card)
+  grid-column:2; grid-row:2; position:relative; overflow:auto; border:1px solid var(--line); background:var(--card);
+  touch-action:pan-x pan-y; /* pinch handled manually; allow panning */
 }
 
 .clues .cstack{display:flex; flex-direction:column; justify-content:flex-end; align-items:center; gap:2px; padding:2px; width:var(--cell)}
