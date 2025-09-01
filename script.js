@@ -62,7 +62,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function renderClues(){
     // righe
-    rowCluesEl.style.gridTemplateRows = `repeat(${H}, var(--cell))`;
+    rowCluesEl.style.setProperty('--h', H);
     rowCluesEl.innerHTML = '';
     for (let r=0;r<H;r++){
       const div = document.createElement('div');
@@ -74,12 +74,11 @@ document.addEventListener('DOMContentLoaded', () => {
       rowCluesEl.appendChild(div);
     }
     // colonne
-    colCluesEl.style.gridTemplateColumns = `repeat(${W}, var(--cell))`;
+    colCluesEl.style.setProperty('--w', W);
     colCluesEl.innerHTML = '';
     for (let c=0;c<W;c++){
       const div = document.createElement('div');
       div.className = 'clue' + (cols[c].length? '' : ' empty');
-      // verticalizza i numeri: ogni span a capo
       div.style.display = 'flex';
       div.style.flexDirection = 'column';
       div.style.alignItems = 'center';
@@ -102,15 +101,13 @@ document.addEventListener('DOMContentLoaded', () => {
         const k = idx(r,c);
         setCellClass(cell, grid[k]);
 
-        // Interazione
+        // Tap/click + doppio tap
         let lastTap = 0;
         cell.addEventListener('click', () => {
           const now = Date.now();
           if (now - lastTap < 260) {
-            // doppio tap => X
-            grid[k] = -1;
+            grid[k] = -1;                 // doppio tap → X
           } else {
-            // ciclo: 0 -> 1 -> -1 -> 0
             grid[k] = (grid[k]===0) ? 1 : (grid[k]===1 ? -1 : 0);
           }
           lastTap = now;
@@ -155,25 +152,15 @@ document.addEventListener('DOMContentLoaded', () => {
     else if (v===-1) el.classList.add('cross');
   }
 
-  // --- Parsing JSON custom ---
-  function showJsonPanel(){
-    jsonPanel.hidden = false;
-    jsonInput.value = JSON.stringify({ w: W, h: H, rows, cols }, null, 2);
-  }
-  function hideJsonPanel(){ jsonPanel.hidden = true; }
+  /* ---------- Line solver + deduzioni ---------- */
 
-  // --- Line solver (deduzioni su una riga/colonna) ---
-  // Dato un array target di lunghezze [3,1,...] e uno stato parziale (array di -1/0/1) produce
-  // tutte le configurazioni valide per quella linea (0/1). Restituisce array di possibili linee.
+  // Tutte le configurazioni valide (0/1) per una linea con blocchi e stato parziale (-1/0/1)
   function lineConfigurations(length, blocks, partial){
     const totalFilled = blocks.reduce((a,b)=>a+b,0);
     const minSpaces = blocks.length > 0 ? (blocks.length - 1) : 0;
     const need = totalFilled + minSpaces;
     if (blocks.length===0){
-      // tutto vuoto
-      for (let i=0;i<length;i++){
-        if (partial[i]===1) return []; // impossibile
-      }
+      for (let i=0;i<length;i++) if (partial[i]===1) return [];
       return [ new Array(length).fill(0) ];
     }
     if (need > length) return [];
@@ -181,9 +168,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const res = [];
     function place(blockIdx, startPos, arr){
       if (blockIdx === blocks.length){
-        // riempi il resto con 0
         for (let i=startPos;i<length;i++){
-          if (partial[i]===1) return; // conflitto
+          if (partial[i]===1) return;
           arr[i]=0;
         }
         res.push(arr.slice());
@@ -192,40 +178,33 @@ document.addEventListener('DOMContentLoaded', () => {
       const bLen = blocks[blockIdx];
 
       for (let pos = startPos; pos + bLen <= length; pos++){
-        // 1) Zeri obbligatori tra startPos e pos-1
+        // zeri tra startPos e pos-1
         let okZeros = true;
         for (let z=startPos; z<pos; z++){
-          if (partial[z]===1){ okZeros = false; break; } // non può essere pieno
+          if (partial[z]===1){ okZeros=false; break; }
           arr[z]=0;
         }
-        if (!okZeros){
-          // questa posizione "pos" è impossibile, prova la successiva
-          // (ripristino non strettamente necessario: gli zeri rimangono zeri)
-          continue;
-        }
+        if (!okZeros) continue;
 
-        // 2) Metti il blocco pieno
+        // blocco pieno
         let ok=true;
         for (let j=0;j<bLen;j++){
-          if (partial[pos+j]===-1){ ok=false; break; } // non può essere X
+          if (partial[pos+j]===-1){ ok=false; break; }
           arr[pos+j]=1;
         }
-        if (!ok) {
-          // ripulisci e passa oltre
+        if (!ok){
           for (let j=0;j<bLen;j++) arr[pos+j]=0;
           continue;
         }
 
-        // 3) Se non è l'ultimo blocco, imponi almeno uno zero di separazione
+        // separatore se non ultimo blocco
         let nextStart = pos+bLen;
         if (blockIdx < blocks.length-1){
-          if (nextStart>=length) {
-            // non c'è spazio per lo zero separatore
+          if (nextStart>=length){
             for (let j=0;j<bLen;j++) arr[pos+j]=0;
             continue;
           }
           if (partial[nextStart]===1){
-            // deve essere 0, conflitto
             for (let j=0;j<bLen;j++) arr[pos+j]=0;
             continue;
           }
@@ -233,19 +212,15 @@ document.addEventListener('DOMContentLoaded', () => {
           nextStart++;
         }
 
-        // 4) Ricorsione per il blocco successivo
         place(blockIdx+1, nextStart, arr);
 
-        // 5) Ripristina il blocco prima di iterare pos++
+        // ripristina blocco
         for (let j=0;j<bLen;j++) arr[pos+j]=0;
-        if (blockIdx < blocks.length-1){
-          arr[pos+bLen]=0; // resta 0 come separatore (non fa danni)
-        }
+        if (blockIdx < blocks.length-1) arr[pos+bLen]=0;
       }
     }
     place(0,0,new Array(length).fill(0));
 
-    // Filtra per coerenza con partial dove partial=1 deve essere 1, partial=-1 deve essere 0
     return res.filter(arr=>{
       for (let i=0;i<length;i++){
         if (partial[i]===1 && arr[i]!==1) return false;
@@ -255,7 +230,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // Applica deduzioni: per una linea, calcola intersezione delle config → celle certe
   function deduceLine(length, blocks, partial){
     const configs = lineConfigurations(length, blocks, partial);
     if (configs.length===0) return {changed:false, impossible:true};
@@ -271,38 +245,23 @@ document.addEventListener('DOMContentLoaded', () => {
       if (all1 && out[i]!==1){ out[i]=1; changed=true; }
       else if (all0 && out[i]!==-1){ out[i]=-1; changed=true; }
     }
-    return { line: out, changed, impossible:false, configsCount: configs.length };
+    return { line: out, changed, impossible:false };
   }
 
-  function getRow(r){
-    const a=new Array(W);
-    for (let c=0;c<W;c++) a[c]=grid[idx(r,c)];
-    return a;
-  }
-  function setRow(r, arr){
-    for (let c=0;c<W;c++) grid[idx(r,c)] = arr[c];
-  }
-  function getCol(c){
-    const a=new Array(H);
-    for (let r=0;r<H;r++) a[r]=grid[idx(r,c)];
-    return a;
-  }
-  function setCol(c, arr){
-    for (let r=0;r<H;r++) grid[idx(r,c)] = arr[r];
-  }
+  const getRow = r => Array.from({length:W},(_,c)=>grid[idx(r,c)]);
+  const setRow = (r, a) => { for(let c=0;c<W;c++) grid[idx(r,c)]=a[c]; };
+  const getCol = c => Array.from({length:H},(_,r)=>grid[idx(r,c)]);
+  const setCol = (c, a) => { for(let r=0;r<H;r++) grid[idx(r,c)]=a[r]; };
 
-  // Esegue deduzioni fino a fissare punto
   function propagate(){
     let changed=true;
     while (changed){
       changed=false;
-      // righe
       for (let r=0;r<H;r++){
         const d = deduceLine(W, rows[r], getRow(r));
         if (d.impossible) return false;
         if (d.changed){ setRow(r, d.line); changed=true; }
       }
-      // colonne
       for (let c=0;c<W;c++){
         const d = deduceLine(H, cols[c], getCol(c));
         if (d.impossible) return false;
@@ -311,112 +270,71 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     return true;
   }
+  const isComplete = () => grid.every(v=>v!==0);
 
-  function isComplete(){
-    return grid.every(v => v!==0);
-  }
-
-  // Backtracking: scegli la linea (riga o colonna) con meno configurazioni > 1
   function chooseBranchLine(){
-    let best = null;
-    // righe
+    let best=null;
     for (let r=0;r<H;r++){
-      const configs = lineConfigurations(W, rows[r], getRow(r));
-      if (configs.length>1){
-        if (!best || configs.length < best.count) best = {type:'row', idx:r, count:configs.length, configs};
-      } else if (configs.length===0){
-        return {type:'row', idx:r, count:0, configs:[]};
-      }
+      const conf = lineConfigurations(W, rows[r], getRow(r));
+      if (conf.length===0) return {type:'row',idx:r,count:0,configs:[]};
+      if (conf.length>1 && (!best || conf.length<best.count)) best={type:'row',idx:r,count:conf.length,configs:conf};
     }
-    // colonne
     for (let c=0;c<W;c++){
-      const configs = lineConfigurations(H, cols[c], getCol(c));
-      if (configs.length>1){
-        if (!best || configs.length < best.count) best = {type:'col', idx:c, count:configs.length, configs};
-      } else if (configs.length===0){
-        return {type:'col', idx:c, count:0, configs:[]};
-      }
+      const conf = lineConfigurations(H, cols[c], getCol(c));
+      if (conf.length===0) return {type:'col',idx:c,count:0,configs:[]};
+      if (conf.length>1 && (!best || conf.length<best.count)) best={type:'col',idx:c,count:conf.length,configs:conf};
     }
-    return best; // può essere null se tutto ha config 0/1
+    return best;
   }
+  const snapshot = () => ({ grid: grid.slice() });
+  const restore  = s  => { grid = s.grid.slice(); };
 
-  function cloneState(){
-    return {
-      grid: grid.slice()
-    };
-  }
-  function restoreState(snap){
-    grid = snap.grid.slice();
-  }
-
-  function solve(limitSolutions=1){
-    // deduzioni iniziali
-    if (!propagate()) return []; // contraddizione
+  function solve(limit=1){
+    if (!propagate()) return [];
     const sols=[];
-    function dfs(){
-      if (sols.length>=limitSolutions) return;
+    (function dfs(){
+      if (sols.length>=limit) return;
       if (isComplete()){ sols.push(grid.slice()); return; }
-
       const pick = chooseBranchLine();
-      if (!pick){ // niente da scegliere ma non completo => errore
-        return;
-      }
-      if (pick.count===0) return; // impossibile
-
-      const snapshot = cloneState();
+      if (!pick || pick.count===0) return;
+      const snap = snapshot();
       for (const conf of pick.configs){
         if (pick.type==='row') setRow(pick.idx, conf);
         else setCol(pick.idx, conf);
 
         if (propagate()){
           dfs();
-          if (sols.length>=limitSolutions) return;
+          if (sols.length>=limit) return;
         }
-        restoreState(snapshot);
+        restore(snap);
       }
-    }
-    dfs();
+    })();
     return sols;
   }
 
-  // --- Verifica coerenza parziale con clues (non prova a risolvere) ---
   function checkConsistency(){
-    // helper: data una linea attuale (-1/0/1), verifica che non violi i blocchi (solo parziale)
     function lineOk(length, blocks, arr){
-      // Costruisci blocchi “1” correnti
-      const blocksSeen=[];
-      let run=0;
+      const seen=[]; let run=0;
       for (let i=0;i<length;i++){
         if (arr[i]===1) run++;
-        else {
-          if (run>0){ blocksSeen.push(run); run=0; }
-        }
+        else { if (run>0){ seen.push(run); run=0; } }
       }
-      if (run>0) blocksSeen.push(run);
-
-      // Non può avere blocchi più lunghi di quelli target
-      for (let i=0;i<blocksSeen.length;i++){
-        if (blocksSeen[i] > (blocks[i]||Infinity)) return false;
-      }
-      // Se ha già completato più blocchi di quelli target → incoerente
-      if (blocksSeen.length > blocks.length) return false;
-
+      if (run>0) seen.push(run);
+      for (let i=0;i<seen.length;i++) if (seen[i] > (blocks[i]||Infinity)) return false;
+      if (seen.length > blocks.length) return false;
       return true;
     }
-    for (let r=0;r<H;r++){
-      if (!lineOk(W, rows[r], getRow(r))) return false;
-    }
-    for (let c=0;c<W;c++){
-      if (!lineOk(H, cols[c], getCol(c))) return false;
-    }
+    for (let r=0;r<H;r++) if (!lineOk(W, rows[r], getRow(r))) return false;
+    for (let c=0;c<W;c++) if (!lineOk(H, cols[c], getCol(c))) return false;
     return true;
   }
 
-  // --- UI: azioni ---
+  /* ---------- UI ---------- */
   newBtn.addEventListener('click', ()=>{
     const v = presetSel.value;
     if (v==='custom'){
-      showJsonPanel();
+      jsonPanel.showModal();
+      jsonInput.value = JSON.stringify({ w: W, h: H, rows, cols }, null, 2);
       setStatus('Incolla un JSON e premi “Applica”.');
       return;
     }
@@ -439,7 +357,7 @@ document.addEventListener('DOMContentLoaded', () => {
   hintBtn.addEventListener('click', ()=>{
     const before = grid.slice();
     const ok = propagate();
-    if (!ok){ setStatus('⛔ Contraddizione: controlla le celle segnate.'); renderBoard(); return; }
+    if (!ok){ setStatus('⛔ Contraddizione: controlla le X/riempimenti.'); renderBoard(); return; }
     renderBoard();
     const changed = before.some((v,i)=> v!==grid[i]);
     setStatus(changed ? '✨ Deduzioni applicate.' : 'ℹ️ Nessuna deduzione trovata.');
@@ -459,16 +377,16 @@ document.addEventListener('DOMContentLoaded', () => {
       W = obj.w|0; H = obj.h|0;
       rows = obj.rows.map(a=>a.slice());
       cols = obj.cols.map(a=>a.slice());
-      hideJsonPanel();
+      jsonPanel.close();
       resetGrid(); renderClues(); renderBoard();
       setStatus('Puzzle custom caricato.');
     }catch(e){
       setStatus('⛔ JSON non valido.');
     }
   });
-  cancelJson.addEventListener('click', ()=>{ hideJsonPanel(); setStatus(''); });
+  cancelJson.addEventListener('click', ()=>{ jsonPanel.close(); setStatus(''); });
 
-  // --- Avvio con preset default ---
+  // Avvio
   (function init(){
     const p = PRESETS[presetSel.value];
     W=p.w; H=p.h; rows=p.rows.map(a=>a.slice()); cols=p.cols.map(a=>a.slice());
