@@ -1,0 +1,142 @@
+/* ======= TEMA & RESET ======= */
+:root{
+  color-scheme: dark;
+  --header-h: 56px;
+  --gap: 2px;
+  --cell: 28px;           /* lato cella base (desktop) */
+  --cell-sm: 24px;        /* lato cella mobile */
+  --clue-bg: #0f1a33;
+  --grid-bg: #0b1220;
+  --ink: #e7e7ef;
+  --accent: #3b82f6;
+}
+*{ box-sizing:border-box; }
+html{ -webkit-text-size-adjust:100%; text-size-adjust:100%; }
+html, body{
+  margin:0; background:#0b1220; color:var(--ink);
+  font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
+  min-height:100dvh; min-height:-webkit-fill-available;
+  overflow-x:hidden;
+}
+
+/* ======= APPBAR & CONTROLLI ======= */
+.appbar{
+  position:sticky; top:0; z-index:30;
+  background:#0b1220; border-bottom:1px solid #122142;
+}
+.appbar .brand{ padding:.75rem 1rem; }
+.appbar h1{ margin:0; font-size:clamp(18px,2.2vw,28px); letter-spacing:.2px; }
+
+.controls.panel{
+  position:sticky; top:var(--header-h); z-index:25;
+  background:#0b1220; padding:.7rem 1rem .55rem; border-bottom:1px solid #122142;
+}
+.controls{ display:flex; flex-wrap:wrap; gap:.55rem .6rem; align-items:center; }
+.status{ margin:.4rem 1rem 0; opacity:.9; }
+
+button, select{ font-size:16px; line-height:1.15; }
+button.ghost{
+  font-weight:700; letter-spacing:.2px; padding:10px 14px; border-radius:10px;
+  background:#ffffff; color:#0f172a; border:1px solid var(--accent);
+}
+button.ghost:hover{ background:#f1f5f9; border-color:#2563eb; }
+
+/* ======= LAYOUT GIOCO ======= */
+.playfield{ padding:.75rem 1rem 1rem; }
+
+.board-wrap{
+  display:grid;
+  grid-template-rows: auto 1fr;
+  gap:.5rem;
+}
+
+/* Clues colonne (sopra) */
+.clues.cols{
+  display:grid;
+  justify-content:start;
+  gap: var(--gap);
+  padding-left: calc(8ch + 8px);  /* largo quanto le clues a sinistra */
+}
+
+/* Avvolgimento griglia+clues righe */
+.grid-wrap{
+  display:grid;
+  grid-template-columns: auto 1fr;
+  gap: .5rem;
+  align-items:start;
+}
+
+/* Clues righe (sinistra) */
+.clues.rows{
+  display:grid;
+  gap: var(--gap);
+}
+
+/* Ogni “stack” di numeri riga/colonna */
+.clue{
+  background:var(--clue-bg);
+  color:#cbd5e1;
+  border:1px solid #1a2a4d;
+  border-radius:8px;
+  padding:4px 6px;
+  text-align:right;
+  display:flex;
+  gap:6px;
+  justify-content:flex-end;
+  align-items:center;
+  min-height: calc(var(--cell) - 4px);
+}
+
+/* Stile numeri clues */
+.clue span{ font-variant-numeric: tabular-nums; opacity:.95; }
+.clue.empty{ opacity:.5; }
+
+/* Board (griglia) */
+.board{
+  --w: 10;
+  --h: 10;
+  display:grid;
+  grid-template-columns: repeat(var(--w), var(--cell));
+  grid-auto-rows: var(--cell);
+  gap: var(--gap);
+  background:#0f1a33; padding:4px; border-radius:12px; border:1px solid #1a2a4d;
+  touch-action: none;
+}
+.cell{
+  background:#0e172b; border-radius:6px; position:relative;
+  border:1px solid #152345;
+}
+.cell.dark{ background:#0c1425; }
+
+/* Stati della cella */
+.cell.fill{ background:#22c55e; border-color:#1a9a4b; }
+.cell.cross::before,
+.cell.cross::after{
+  content:""; position:absolute; inset:8px;
+  border-top:2px solid #ef4444;
+  transform-origin:center;
+}
+.cell.cross::after{ transform:rotate(90deg); }
+
+/* Hover desktop */
+@media (hover:hover){
+  .cell:hover{ outline:1px dashed rgba(255,255,255,.2); }
+}
+
+/* JSON panel */
+.json-panel{
+  margin-top:1rem; padding:1rem;
+  background:#0f1a33; border:1px solid #1a2a4d; border-radius:12px;
+}
+.json-panel textarea{
+  width:100%; background:#0b1220; color:#e7e7ef;
+  border:1px solid #1a2a4d; border-radius:8px;
+  padding:.75rem; font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+/* ======= RESPONSIVE ======= */
+@media (max-width: 860px){
+  :root{ --cell: var(--cell-sm); }
+  .clue{ min-height: calc(var(--cell-sm) - 4px); }
+  .clues.cols{ padding-left: calc(7ch + 8px); }
+}
